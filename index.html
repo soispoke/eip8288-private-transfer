@@ -62,7 +62,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
 .spec summary{cursor:pointer;font:15px var(--ui);color:var(--dim)}
 .spec summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .note{font-size:16px;line-height:1.6;margin:10px 0 0}
-.keys{font:13px var(--ui);color:var(--faint);text-align:center;margin:0}
+.keys{font:13px var(--ui);color:var(--dim);text-align:center;margin:0}
+.narrow{display:none}
+@media (max-width:700px) and (orientation:portrait){.narrow{display:block}}
 </style>
 </head>
 <body>
@@ -72,7 +74,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
     <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
   </header>
   <div class="stagebox">
-    <svg id="stage" viewBox="0 0 1600 900" role="img" aria-label="Animation of a private, post-quantum secure transfer going from a wallet through a shielded pool contract, the mempool and a block">
+    <svg id="stage" viewBox="0 0 1600 900" role="img" aria-label="Animation of a private, post-quantum secure transfer from a wallet through the mempool to a block, with a shielded pool contract as its sender">
       <defs id="defs">
         <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff"/><stop offset="0.8" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
       </defs>
@@ -81,6 +83,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
     </svg>
     <button class="bigplay" id="bigplay" type="button"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z" fill="currentColor"/></svg><span id="bigplaytxt">Play</span></button>
   </div>
+  <p class="keys narrow">On a phone the labels are small. Turn the phone sideways or pinch to zoom.</p>
   <div class="controls">
     <button id="prev" type="button" aria-label="Previous step"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M19 5.5L9 12l10 6.5z" fill="currentColor"/></svg></button>
     <button id="play" type="button" aria-label="Play"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path id="playicon" d="M7 4l14 8-14 8z" fill="currentColor"/></svg></button>
@@ -398,46 +401,46 @@ function travel(from, to, t, d, target) {
 const CAP = [
   'Alice pays Bob from a shielded pool. We follow her transaction from her wallet to a block and look at what each party checks along the way.',
   'Alice holds two notes in a shielded pool, worth 0.9 and 0.5 ETH. She wants to pay Bob 1.2 ETH without revealing her notes, the amounts or who she pays.',
-  'Everything that could identify her stays on her device: the notes she spends, her spending key, their Merkle paths and the two new notes. This is the witness.',
-  'The statement is the public part of the spend: the root she proves against, a nullifier for each spent note, a commitment for each new note, the fee, and a hash that ties all of it to this transaction. Each note shows up only as a commitment, so its amount, its owner and which notes she spent stay hidden.',
+  'Her wallet keeps the secret inputs to the proof: the notes she spends, the key that owns them, the Merkle paths showing they are in the tree, and the two new notes. This is the witness.',
+  'The statement is what everyone sees: the tree root her paths lead to, one nullifier per spent note so it can’t be spent twice, one commitment per new note, the fee, and the binding, a hash of this transaction. Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent.',
   'Her wallet runs the pool’s program on leanVM and proves that the statement satisfies the relation for some witness. The result is a zero-knowledge STARK, π, which reveals nothing about the witness.',
-  'The proof will be checked against two 32-byte values: `data_hash`, the Keccak-256 hash of the statement, and `program_id`, a hash of the pool’s program and the ISA version it runs under. This is the proposed program scheme; today’s EIP-8288 has a verification key hash in that place.',
-  'The wallet then builds one frame transaction. The first frame names the recent root, the pool’s `VERIFY` frame asks the pool to approve, the dependency frame names the proof, and the `SENDER` frame carries the public inputs. The binding sits in no frame, because it is a hash of the transaction itself.',
-  'The pool is the sender, so Alice needs no public account. Her nullifiers become the nonce keys, and her root goes into the first frame. There is no signature, because the proof is bound to this exact transaction and authorizes it.',
+  'The proof will be checked against two 32-byte values: `data_hash`, a hash of the statement, and `program_id`, a hash of the pool’s program and its ISA version. The proposed program scheme puts `program_id` where today’s EIP-8288 has a verification key hash.',
+  'The wallet builds one frame transaction. The first frame names the recent root, the pool’s `VERIFY` frame asks the pool to approve, the dependency frame holds `data_hash` and `program_id`, and the `SENDER` frame carries the public inputs. The binding sits in no frame. It is a hash of this transaction, so the wallet builds the transaction before it proves.',
+  'The pool is the sender, so Alice needs no public account. Her nullifiers are the nonce keys, and her root is in the first frame. There is no signature, because the proof is bound to this exact transaction and authorizes it.',
   'The pool is an ordinary contract on L1. It holds the note tree and the pool’s ETH, and it pins `program_id`, which names its program and the ISA version. It never verifies a proof itself.',
-  'In its `VERIFY` frame, the pool reads the other frames. It checks that the dependency names its own `program_id` and the hash of what it will settle, that the binding matches this transaction, that the nonce keys are its nullifiers at sequence 0, that the root comes from its own source, and that the fee covers gas. Then it approves and agrees to pay.',
+  'When nodes and validators run the pool’s `VERIFY` frame, the pool reads the transaction. It checks that the dependency names its own `program_id` and the hash of what it will settle, and that the binding matches this transaction. It also checks the nonce keys, the root source, the fee and the frame list, and that the spend will settle. Then it approves and agrees to pay.',
   'Two protocol rules back this up, as long as the pool checks the right things. A nonce key at sequence 0 can be consumed only once, so two spends of the same note can’t both be included. And the first frame fails unless the root is recent, while the pool makes sure it comes from its own root source.',
   'The `SENDER` frame only runs once the transaction is in a block. The pool then appends the two new commitments to its tree.',
-  'This is why the proposed `0x11` puts the ISA version inside `program_id`. The id always means the same program under the same rules. When a fork brings a new prover, wallets prove the same program with it, and if the machine itself changes, the prover runs the old version through an interpreter. An immutable pool keeps working without anyone moving funds.',
+  'The proposed `0x11` puts the ISA version inside `program_id`, so the id always means the same program under the same rules. When a fork brings a new prover, wallets prove the same program with it. If the prover’s machine changes, meaning the ISA it runs natively, the old ISA runs through an interpreter. An immutable pool keeps working without anyone moving funds.',
   'The proof is not part of the transaction. The wallet sends the two side by side in a mempool wrapper, and the witness never leaves Alice’s device.',
-  'The node verifies π natively, with the verifier its fork specifies for the scheme. Then it runs the first two frames against its own copy of the state, and it only accepts the transaction if the root is recent and the pool approves.',
-  'Other wallets send their wrappers too. Every second, each node folds the proofs of all the valid transactions it holds into one recursive STARK.',
+  'The node verifies π outside the EVM, with the verifier the current fork specifies for the scheme. Then it runs the first two frames against its own copy of the state, and it only accepts the transaction if the root is recent and the pool approves.',
+  'Other wallets send their wrappers too. Every second, each node merges the proofs of all the valid transactions it holds into one recursive STARK.',
   'Nodes forward one wrapper per round with a single recursive STARK, and they send only a hash for transactions they already broadcast. However many transactions there are, each wrapper carries one proof.',
   'A builder picks the transactions for its block, drops the dependencies of anything it leaves out and merges the remaining proofs into one final recursive STARK.',
-  'The header carries that STARK and `block_deps_hash`, a hash of every dependency in the block. The body keeps each transaction with its 96-byte dependency entry, and no individual proof goes on chain.',
+  'The header carries that STARK and `block_deps_hash`, a hash of every dependency in the block. The body keeps the transactions, with a 96-byte entry for each dependency. No individual proof goes on chain.',
   'Validators recompute that hash from the body, verify the one STARK for the whole block, and then execute the transactions as usual.',
   'When Alice’s transaction runs, the pool approves it again, which uses up her two nonce keys and makes the pool pay for gas. The `SENDER` frame then adds Bob’s note and her change to the tree, under a new root.',
-  'The witness never left Alice’s device, and her proof stopped at the mempool and the builder, folded into larger proofs. The chain keeps the statement, a 96-byte dependency entry and one STARK per block.',
+  'The witness never left Alice’s device, and her proof was merged into larger proofs at the mempool and again at the builder. The chain keeps the statement, a 96-byte dependency entry and one STARK per block.',
   'Every proof in this flow is a hash-based STARK, and no contract verifies one. The pool checks public inputs, while nodes and validators check the proofs.',
 ];
 const NOTE = [
-  'EIP-8288 (Draft) adds dependency frames, mempool wrappers and one recursive STARK per block to EIP-8141 frame transactions. This animation shows the program scheme proposed for `0x11` in the accompanying post; today’s EIP-8288 text puts a verification key hash in that field instead. The pool is the minimal shielded pool (MSP), adapted to EIP-8288, with EIP-8250 keyed nonces and EIP-8272 recent roots. Amounts are illustrative.',
+  'EIP-8288 (Draft) adds dependency frames, mempool wrappers and one recursive STARK per block to EIP-8141 frame transactions. This animation shows the program scheme proposed for `0x11` in the ethresear.ch post “Post-quantum private transactions: Exposing an ISA”. Today’s EIP-8288 text names a verification key hash where that scheme names the program and its ISA version. The pool is the minimal shielded pool (MSP), adapted to EIP-8288, with EIP-8250 keyed nonces and EIP-8272 recent roots. Amounts are illustrative.',
   'A spend with two inputs and two outputs, the shape the minimal shielded pool uses.',
   'The witness is the private input to the relation. To build the Merkle paths, the wallet keeps a synced copy of the pool’s note tree.',
-  'A note’s commitment is `hash(inner, value)` with `inner = hash(owner key, rho)`, so the amount (the spec’s “value”) stays hidden, and the proof checks that input values equal output values plus `public_amount` plus the fee. In the MSP the statement also carries a domain (which commits to the chain, the pool and the tree epoch), a public amount and a recipient. The binding is `keccak(0x06 || rlp(tx))` with the dependency frame’s data left out, since that frame holds `data_hash`. No frame carries the binding, and the pool has to rebuild it, because `TXPARAM(0x08)` covers the dependency frame. EIP-8288 doesn’t yet say how dependency frames enter the signature hash (its own test case reads `msghash` from `TXPARAM`), so this elision is an assumption here. Around the statement, the chain also sees the rest of the transaction: the pool as sender, the nonce keys (equal to the nullifiers), the root tuple, the dependency, the gas fields, and its timing and size. A real pool would also post encrypted notes so Bob can find his.',
-  'leanVM is the zkVM and leanSTARK its proof system. A private transaction needs the zero-knowledge version; the leanVM commit pinned in the EVM spend benchmark has no zero knowledge yet.',
-  'Proposed program scheme for `0x11`: the third field of the 96-byte entry holds `program_id = hash(ISA version, program bytes)` instead of a verification key hash. For an EVM program the version is the fork whose rules it runs under. `data_hash` is the hash of the program’s public output, using a hash the EVM computes cheaply such as Keccak-256. Each fork specifies the verifier behind the scheme; the 30,000 gas and the limit of one STARK per transaction stay as in EIP-8288.',
-  'Frame 0 is EIP-8272’s recent root frame: a `VERIFY` frame to the recent root contract at `0x…8272` with 72-byte `(source_id, slot, root)` tuples, placed before every frame except an optional expiry frame. Frame 2 has `DEP_VERIFY_FRAME_MODE` = 3 (EIP-8288): no target, value 0, flags 0 and a gas limit of 30,000 per STARK. It comes after the pool’s `VERIFY` frame so the validation prefix keeps a shape EIP-8141 and EIP-8272 recognize. `VERIFY` = 1 and `SENDER` = 2 (EIP-8141). Mempool policy allows one leanSTARK dependency per transaction (`MAX_STARKS_PER_TX` = 1).',
-  '`sender` = pool, and the pool’s `VERIFY` frame has flags `0x3`, which allow `APPROVE` of execution and payment, so the pool is both sender and payer. Here the nullifiers are EIP-8250 nonce keys at sequence 0, and `signatures` is empty because the proof’s binding replaces the secp256k1 signature from an `authorizer` address that today’s MSP requires. Shields, claims and root publications still carry a leanSPHINCS signature dependency. The recent-root frame has flags 0, so it can only pass or fail.',
+  'A note’s commitment is `hash(inner, value)` with `inner = hash(owner key, rho)` and `owner key = hash(spending key)`, so the amount (the note’s `value`) stays hidden, and the proof checks that input values equal output values plus `public_amount` plus the fee. In the MSP the statement also carries a domain (which commits to the chain, the pool and the tree epoch), a public amount and a recipient. The binding is `keccak(0x06 || rlp(tx))` with the dependency frame’s data left out, since that frame holds `data_hash`. No frame carries the binding, and the pool has to rebuild it, because `TXPARAM(0x08)` covers the dependency frame. EIP-8288 doesn’t yet say how dependency frames enter the signature hash (its own test case reads `msghash` from `TXPARAM`), so this elision is an assumption here. Around the statement, the chain also sees the rest of the transaction: the pool as sender, the nonce keys (equal to the nullifiers), the root tuple, the dependency, the gas fields, and its timing and size. A real pool would also post encrypted notes so Bob can find his.',
+  'leanVM is the zkVM and leanSTARK its proof system. A private transaction needs leanSTARK with zero knowledge; the leanVM commit pinned in the post’s EVM spend benchmark has no zero knowledge yet.',
+  'Proposed program scheme for `0x11`: the third field of the 96-byte entry holds `program_id = hash(ISA version, program bytes)` instead of a verification key hash. For an EVM program the version is the fork whose rules it runs under. The program’s public output is `data_hash` itself: the program hashes the statement inside the proof, and the pool recomputes that hash in its `VERIFY` frame, so the hash should be cheap in both places. The animation uses Keccak-256, which is cheap in the EVM but would need a zkVM precompile in leanVM. Each fork specifies the verifier behind the scheme; the 30,000 gas and the mempool’s limit of one STARK per transaction stay as in EIP-8288.',
+  'Frame 0 is EIP-8272’s recent root verifier frame: a `VERIFY` frame to the recent root contract at `0x…8272` with 72-byte `(source_id, slot, root)` tuples, placed before every frame except an optional `expiry_verify` frame. Frame 2 has `DEP_VERIFY_FRAME_MODE` = 3 (EIP-8288): no target, value 0, flags 0 and a gas limit of 30,000 per STARK. It comes after the pool’s `VERIFY` frame, so the validation prefix (the frames up to and including the one that sets the payer) keeps a shape EIP-8141 and EIP-8272 recognize. `VERIFY` = 1 and `SENDER` = 2 (EIP-8141). Mempool policy allows one leanSTARK dependency per transaction (`MAX_STARKS_PER_TX` = 1).',
+  '`sender` = pool, and the pool’s `VERIFY` frame has flags `0x3`, which allow `APPROVE` of execution and payment, so the pool is both sender and payer. Here the nullifiers are EIP-8250 nonce keys at sequence 0, and `signatures` is empty because the proof’s binding replaces the secp256k1 signature from an `authorizer` address that today’s MSP requires. Other transactions that call the pool (shields, claims and root publications) come from ordinary accounts and still carry a leanSPHINCS signature dependency. The recent root verifier frame has flags 0, so it can only pass or fail.',
   '`program_id` is fixed when the pool is deployed. Because it names a program and an ISA version rather than one prover’s verification key, it keeps its meaning when a fork changes the prover.',
-  '`FRAMEPARAM(0x02, i)` returns frame i’s mode and `FRAMEDATACOPY` copies its data (EIP-8288, Transaction Execution Visibility). EIP-8250 says single-use keys must authenticate `(sender, nonce_keys_hash, nonce_seq == 0)` in `VERIFY`, and an EIP-8272 frame only proves that a tuple is stored and recent, so the pool checks that the root source is its own. In a `VERIFY` frame only `APPROVE` can change state (EIP-8141). `APPROVE(0x3)` sets payer = pool and collects the maximum gas cost from its balance; the unused part is refunded after execution.',
-  'EIP-8250 consumes all of a transaction’s nonce keys atomically at payment approval, and that survives a later `SENDER` failure, so settlement must never revert. EIP-8272 accepts roots at most 8,191 slots old (`RECENT_ROOT_USABLE_WINDOW`), and anyone can create a root source, which is why the pool must check `source_id`.',
-  'The MSP tree has depth 20 and sequential inserts. A withdrawal instead credits its recipient here, and a separate claim call pays the ETH, so settlement makes no external call that could revert.',
-  'Published ISA versions never change, and each fork keeps every published version provable. Because old programs are proved again under the current proof system, they survive even a broken old proof system; wrapping old proofs instead holds only while the old system stays sound. The prover must apply each program’s own version, and the program bytes must stay available, since the pool stores only their hash.',
-  'Wrapper encoding: `[transactions, mode, content]`. In mode 0, `content = [deps, proofs]`, one proof per dependency, and the node checks each proof on its own.',
-  'EIP-8141 public mempool rules: the validation prefix is the shortest prefix of frames that sets the payer, it must match a recognized shape, and its execution limits plus signature checks must fit in `MAX_VERIFY_GAS` = 100,000. Here the prefix is the recent root frame plus the pool’s `self_verify` frame, which EIP-8272 recognizes and counts toward the limit; the dependency frame comes after it. Whether the pool’s `VERIFY` frame fits the limit is not measured yet.',
+  '`FRAMEPARAM(0x02, i)` returns frame i’s mode and `FRAMEDATACOPY` copies its data (EIP-8288, Transaction Execution Visibility). EIP-8250 says applications with single-use keys, such as nullifiers, must authenticate at least `(sender, nonce_keys_hash, nonce_seq == 0)` in `VERIFY`, and the binding covers all three. An EIP-8272 frame only proves that a tuple is stored and recent, so the pool checks that the root source is its own. In a `VERIFY` frame only `APPROVE` can change state (EIP-8141). `APPROVE(0x3)` sets payer = pool and collects the maximum gas cost from its balance; the unused part is refunded after execution. The fee, which the relation takes out of Alice’s notes, must be at least that maximum, so other depositors’ ETH never pays her gas, and any surplus stays in the pool. The pool also checks the exact frame list (four frames with fixed modes and targets, no value, and one `settle` call), because once it approves execution every later `SENDER` frame acts as the pool and could move its ETH. It also checks that the statement’s domain matches its chain, its address and the epoch of the root the spend proves against, because under another domain the same note would get a second nullifier, so it could be spent twice.',
+  'EIP-8250 consumes all of a transaction’s nonce keys atomically at payment approval, and they stay consumed if the `SENDER` frame later fails. A failed settlement would spend Alice’s notes without adding Bob’s note or her change. So the pool must make sure the new notes fit in its tree, and before approving it reads the `SENDER` frame’s execution and state gas limits with `FRAMEPARAM` (`0x01` and `0x09`) to check that they are enough to settle. EIP-8272 accepts roots at most 8,191 slots old (`RECENT_ROOT_USABLE_WINDOW`), and anyone can create a root source, which is why the pool must check `source_id`.',
+  'The MSP tree has depth 20 and sequential inserts. A withdrawal instead credits its recipient here, and a separate claim call pays the ETH, so settlement makes no external call that could revert. Settlement also won’t run out of gas, as long as the gas limits the pool requires before approving cover settlement’s worst case. In the MSP the check that the tree has room always passes, because when the new notes don’t fit, settlement starts a new tree epoch for them.',
+  'An ISA version never changes once a fork activates it, and each fork keeps every activated version provable. Because old programs are proved again under the current proof system, they survive even a broken old proof system. Wrapping, which proves in the new system that the old verifier accepted an old proof, holds only while the old system stays sound. The relation behind the scheme, not the prover, must enforce each program’s own version, so that an instruction added later still traps in older programs. The program bytes must also stay available, since the pool stores only their hash. An eISA is an Ethereum ISA designed for proving.',
+  'Wrapper encoding: `[transactions, mode, content]`. In mode 0, `content = [deps, proofs]`, one proof per dependency, and the node checks each proof on its own. The node that first receives the wrapper still sees the network address it came from, which a private route such as Tor can hide.',
+  'EIP-8141 public mempool rules: the validation prefix is the shortest prefix of frames that sets the payer, it must match a recognized shape, and its execution limits plus signature checks must fit in `MAX_VERIFY_GAS` = 100,000. Here the prefix is the recent root verifier frame plus the pool’s `self_verify` frame, which EIP-8272 recognizes and counts toward the limit; the dependency frame comes after it. Whether the pool’s `VERIFY` frame fits the limit is not measured yet. State gas has its own cap: the pool’s `APPROVE` creates the two nonce key slots, and under EIP-8250 that state gas comes from the state limit of the pool’s frame. EIP-8141 caps the sum of state limits across the validation prefix at `MAX_VERIFY_STATE_GAS` = 500,000.',
   '`AGGREGATION_INTERVAL` = 1000 ms. A node also prunes the dependencies of transactions that become unincludable, for example once another transaction consumes the same nonce key. EIP-8141 and EIP-8250 still allow one pending frame transaction per sender, so a node holds one transfer from this pool at a time until a keyed-nonce concurrency rule is adopted.',
-  'Mode 1 wrapper: `[transactions, 1, [deps, recursive_stark]]`. The receiver checks that the STARK’s public input equals `hash(deps)` and verifies it against the protocol-wide `AGGREGATED_VK`. Read literally, the mode 1 checks also cap leanSTARK dependencies per wrapper at `MAX_LEANSTARK_DEPS_PER_WRAPPER` = 1, which conflicts with one wrapper per round; the draft doesn’t resolve this yet.',
+  'Mode 1 wrapper: `[transactions, 1, [deps, recursive_stark]]`. The receiver checks that the STARK’s public input equals `hash(deps)` and verifies it against the protocol-wide `AGGREGATED_VK`. Read literally, the mode 1 checks also cap each wrapper at one leanSTARK dependency (`MAX_LEANSTARK_DEPS_PER_WRAPPER` = 1). Since a node sends one wrapper per round holding all its active transactions, it could then forward only one transaction with a leanSTARK dependency, such as this transfer, per round. The draft doesn’t resolve this yet.',
   'Mempool nodes, FOCIL creators and builders run the same aggregation: verify the inputs, merge them and discard what is no longer needed. FOCIL inclusion lists carry their own recursive STARK.',
   'Header field `recursive_stark = [stark_proof, block_deps_hash]`, where `block_deps_hash` hashes the block’s 96-byte triples, deduplicated and sorted.',
   'EIP-8288 block validity: (1) `block_deps_hash` matches the dependencies in the body, (2) the recursive STARK verifies against `block_deps_hash` and `AGGREGATED_VK`, (3) every transaction satisfies its usual validity rules.',
@@ -455,13 +458,13 @@ const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, 
 /* 0. Title */
 const title = Txt(800, 336, 'Private, post-quantum secure', {size: 58, anchor: 'middle'});
 const title2 = Txt(800, 408, 'transfer under EIP-8288', {size: 58, anchor: 'middle'});
-const sub1 = Txt(800, 488, 'wallet   →   pool   →   mempool   →   block', {size: 30, anchor: 'middle', fill: C.dim});
-const sub2 = Txt(800, 544, 'EIP-8141 frame transactions with EIP-8288 proof dependencies', {size: 22, anchor: 'middle', fill: C.faint});
-beat(0, 5, (t) => {
+const sub1 = Txt(800, 488, 'wallet   ·   pool   ·   mempool   ·   block', {size: 30, anchor: 'middle', fill: C.dim});
+const sub2 = Txt(800, 544, 'EIP-8141 frame transactions with EIP-8288 proof dependencies', {size: 22, anchor: 'middle', fill: C.dim});
+beat(0, 8, (t) => {
   A.write(title, t + 0.2, 1.3); A.write(title2, t + 0.8, 1.3);
   A.fadeIn(sub1, t + 1.3, 0.8, {dy: 12});
   A.fadeIn(sub2, t + 1.8, 0.8, {dy: 12});
-  A.fadeOut([title, title2, sub1, sub2], t + 4.2, 0.7);
+  A.fadeOut([title, title2, sub1, sub2], t + 8.0, 0.7);
 });
 const POSTER = 3.0;
 
@@ -470,7 +473,7 @@ const device = Card(40, 60, 2260, 800, C.grey, {fo: 0.025, r: 30, sw: 2.5});
 const devLbl = CT(device, 34, 50, 'Alice’s device', {size: 24, fill: C.dim});
 const n1 = NoteCard(265, 250, '0.9 ETH'), n2 = NoteCard(265, 338, '0.5 ETH');
 const intent = Txt(800, 300, 'Alice pays Bob 1.2 ETH', {size: 38, anchor: 'middle'});
-beat(1, 7, (t) => {
+beat(1, 9, (t) => {
   A.draw(device, t, 1.6); A.fadeIn(devLbl, t + 0.6, 0.6);
   A.fadeIn([n1, n2], t + 1.2, 0.7, {lag: 0.25, dx: -20});
   A.write(intent, t + 2.2, 1.4);
@@ -487,7 +490,7 @@ const witRows = [
   Row(wit, 244, 'new notes', '1.2 ETH for Bob', 172),
   Row(wit, 284, '', '0.19 ETH change', 172),
 ];
-beat(1, 8, (t) => {
+beat(1, 11, (t) => {
   A.to(intent, t, 1.0, {x: 640, y: 132, s: 0.8});
   A.draw(wit, t + 0.3, 1.2); A.write(witT, t + 0.9, 0.8); A.fadeIn(witTag, t + 1.2, 0.5);
   A.to([n1, n2], t + 1.0, 1.0, {x: 330, y: 272, s: 0.35});
@@ -504,9 +507,9 @@ const stmRows = [
   Row(stm, 148, 'nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 168),
   Row(stm, 196, 'commitments', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 168),
   Row(stm, 244, 'fee', '0.01 ETH', 168),
-  Row(stm, 292, 'binding', 'this tx’s hash', 168),
+  Row(stm, 292, 'binding', 'a hash of this tx', 168),
 ];
-beat(1, 10, (t) => {
+beat(1, 18, (t) => {
   A.draw(stm, t, 1.2); A.write(stmT, t + 0.6, 0.8); A.fadeIn(stmTag, t + 0.9, 0.5);
   A.fadeIn(stmRows, t + 1.4, 0.6, {lag: 0.45, dx: -12});
 });
@@ -516,7 +519,7 @@ const relT = CT(rel, 22, 46, 'relation <m>R</m>', {size: 30, fill: C.green});
 const relSub = CT(rel, 22, 80, 'the pool’s rules', {size: 20, fill: C.dim});
 const relRows = ['spender owns the spent notes', 'spent notes are in the tree', 'nullifiers match the notes', 'inputs = outputs + fee', 'commitments match new notes']
   .map((s, i) => CT(rel, 22, 120 + 34 * i, s, {size: 20}));
-const relVk = CT(rel, 22, 312, 'program bytes, ISA version', {size: 19, fill: C.dim});
+const relVk = CT(rel, 22, 312, 'ISA version, program bytes', {size: 19, fill: C.dim});
 const prover = Card(530, 590, 270, 84, C.grey, {fo: 0.06});
 const proverT = CT(prover, 135, 52, 'leanVM prover', {size: 26, anchor: 'middle'});
 const aW = Arrow(420, 524, 528, 612, C.red, {bend: 26});
@@ -540,7 +543,7 @@ const aVk = Arrow(665, 524, 665, 588, C.green), lVk = Txt(682, 562, 'hash', {siz
 const vkChip = Chip(665, 612, 'program_id', C.green);
 const aDh = Arrow(1030, 524, 1030, 588, C.blueL), lDh = Txt(1047, 562, 'Keccak-256', {size: 19, fill: C.dim});
 const dhChip = Chip(1030, 612, 'data_hash', C.blueL);
-beat(1, 7, (t) => {
+beat(1, 12, (t) => {
   A.fadeOut([prover, aW, aR, aS, aP], t, 0.6);
   A.draw(aDh, t + 0.8, 0.6); A.fadeIn(lDh, t + 1.0, 0.4); A.fadeIn(dhChip, t + 1.3, 0.6, {s0: 0.5});
   A.draw(aVk, t + 2.6, 0.6); A.fadeIn(lVk, t + 2.8, 0.4); A.fadeIn(vkChip, t + 3.1, 0.6, {s0: 0.5});
@@ -556,7 +559,7 @@ const txDiv1 = CLine(tx, 20, 76, 700, 76, C.rule);
 const hSender = Row(tx, 120, 'sender', '<k=teal>pool</k>', 250, {size: 24, lx: 28});
 const hNonce = Row(tx, 164, 'nonce keys', '', 250, {size: 24, lx: 28});
 const hNonceV = CT(tx, 250, 164, '<k=blue><m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub></k>', {size: 24});
-const hNonceTag = CT(tx, 692, 164, 'EIP-8250', {size: 18, fill: C.faint, anchor: 'end'});
+const hNonceTag = CT(tx, 692, 164, 'EIP-8250', {size: 18, fill: C.dim, anchor: 'end'});
 const hSig = Row(tx, 208, 'signatures', 'none', 250, {size: 24, lx: 28});
 const nAnn = CT(tx, 360, 164, 'the pool requires sequence 0', {size: 18, fill: C.yellow});
 const txDiv2 = CLine(tx, 20, 236, 700, 236, C.rule);
@@ -565,17 +568,17 @@ const FY = [290, 386, 482, 578], FH = 84;
 const fRows = FY.map((y) => CBox(tx, 20, y, 680, FH, C.faint));
 const fIdx = FY.map((y, i) => CT(tx, 44, y + 52, String(i), {size: 24, fill: C.dim}));
 const fMode = [['VERIFY', C.green], ['VERIFY', C.green], ['DEP_VERIFY', C.blueL], ['SENDER', C.blue]].map(([l, c], i) => CChip(tx, 142, FY[i] + 34, l, c, {w: 136, size: 20}));
-const fModeN = ['mode 1', 'mode 1', 'mode 3', 'mode 2'].map((s, i) => CT(tx, 142, FY[i] + 72, s, {size: 17, fill: C.faint, anchor: 'middle'}));
+const fModeN = ['mode 1', 'mode 1', 'mode 3', 'mode 2'].map((s, i) => CT(tx, 142, FY[i] + 72, s, {size: 17, fill: C.dim, anchor: 'middle'}));
 const fRa = CT(tx, 226, FY[0] + 36, 'target: recent root contract', {size: 22});
-const fRtag = CT(tx, 692, FY[0] + 36, 'EIP-8272', {size: 18, fill: C.faint, anchor: 'end'});
+const fRtag = CT(tx, 692, FY[0] + 36, 'EIP-8272', {size: 18, fill: C.dim, anchor: 'end'});
 const fRb = CT(tx, 226, FY[0] + 66, 'root', {size: 19, fill: C.dim});
 const fRv = CT(tx, 276, FY[0] + 66, '<k=blue><m>r</m></k>', {size: 22});
 const rAnn = CT(tx, 330, FY[0] + 66, 'recent, and from the pool’s own source', {size: 18, fill: C.yellow});
 const f0s = CChip(tx, 249, FY[2] + 34, '0x11', C.grey);
-const f0sL = CT(tx, 249, FY[2] + 72, 'leanSTARK', {size: 17, fill: C.faint, anchor: 'middle'});
+const f0sL = CT(tx, 249, FY[2] + 72, 'leanSTARK', {size: 17, fill: C.dim, anchor: 'middle'});
 const f0dh = CChip(tx, 357, FY[2] + 34, 'data_hash', C.blueL);
 const f0vk = CChip(tx, 497, FY[2] + 34, 'program_id', C.green);
-const f0g = CT(tx, 632, FY[2] + 40, 'gas 30,000', {size: 17, fill: C.faint, anchor: 'middle'});
+const f0g = CT(tx, 632, FY[2] + 40, 'gas 30,000', {size: 17, fill: C.dim, anchor: 'middle'});
 const f1a = CT(tx, 226, FY[1] + 36, 'target: <k=teal>pool</k>', {size: 22});
 const f1b = CT(tx, 226, FY[1] + 66, 'checks, then calls <c>APPROVE</c>', {size: 19, fill: C.dim});
 const f1ok = Check(...at(tx, 660, FY[1] + 42), C.green, {parent: tx, k: 0.9});
@@ -583,13 +586,13 @@ const f2a = CT(tx, 226, FY[3] + 36, 'target: <k=teal>pool</k>', {size: 22});
 const f2b = CT(tx, 226, FY[3] + 66, '<c>settle(</c><k=blue>public inputs</k><c>)</c>', {size: 20});
 const bindLbl = Txt(TX.x + TX.w / 2, 836, 'binding = hash of this transaction, without the dependency frame’s data', {size: 19, fill: C.blueL, anchor: 'middle'});
 const W = (lx, ly) => [TX.x + lx, TX.y + ly]; // world position of a point on the transaction card at its home position
-beat(1, 12, (t) => {
+beat(1, 17, (t) => {
   A.fadeOut([intent, rel, aVk, lVk, aDh, lDh, piLbl], t, 0.6);
   A.cam(t + 0.2, 2.2, {cx: 1600, cy: 450});
   A.to(stm, t + 0.2, 2.2, {x: 1320, y: 330, s: 0.7});
   A.to(dhChip, t + 0.2, 2.2, {x: 1320, y: 560});
   A.to(vkChip, t + 0.2, 2.2, {x: 1320, y: 628});
-  A.to(pi, t + 0.2, 2.2, {x: 1320, y: 752});
+  A.to(pi, t + 0.2, 2.2, {x: 1320, y: 752}); A.fadeOut(pi, t + 0.2, 0.6);
   A.draw(tx, t + 2.2, 1.2); A.write(txT, t + 2.8, 0.9); A.fadeIn(txTag, t + 3.1, 0.5); A.draw(txDiv1, t + 3.0, 0.6);
   A.fadeIn([hSender, hNonce, hSig], t + 3.3, 0.5, {lag: 0.15, dx: -10});
   A.fadeIn(hNonceTag, t + 3.6, 0.5);
@@ -614,16 +617,16 @@ beat(1, 12, (t) => {
 const gNf = Txt(...W(226, FY[3] + 66), '<k=blue><m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub></k>', {size: 24});
 const gR = Txt(...W(226, FY[3] + 66), '<k=blue><m>r</m></k>', {size: 22});
 const piAuth = Txt(1320, 834, 'authorizes this exact tx', {size: 20, fill: C.yellow, anchor: 'middle'});
-beat(1, 9, (t) => {
+beat(1, 12, (t) => {
   circum(...W(238, 94), 78, 36, C.teal, t + 0.2, {hold: 1.2});
   A.fadeIn(gNf, t + 1.0, 0.3); A.to(gNf, t + 1.2, 1.2, {x: W(250, 0)[0], y: W(0, 164)[1]}); A.handoff(gNf, hNonceV, t + 2.4, 0.15);
   A.fadeIn(gR, t + 2.8, 0.3); A.to(gR, t + 3.0, 1.1, {x: W(276, 0)[0], y: W(0, FY[0] + 66)[1]}); A.handoff(gR, fRv, t + 4.1, 0.15);
   circum(...W(238, 182), 72, 36, C.yellow, t + 4.8, {hold: 1.2});
-  A.pulse(pi, t + 5.8, 0.9, 1.18); A.fadeIn(piAuth, t + 6.2, 0.6);
+  A.fadeIn(pi, t + 5.0, 0.6); A.pulse(pi, t + 5.8, 0.9, 1.18); A.fadeIn(piAuth, t + 6.2, 0.6);
 });
 
 /* 2. Pool */
-const PC = {x: 2400, y: 60, w: 760, h: 780};
+const PC = {x: 2400, y: 60, w: 760, h: 852};
 const P = (lx, ly) => [PC.x + lx, PC.y + ly];
 const pool = Card(PC.x, PC.y, PC.w, PC.h, C.teal, {fo: 0.05});
 const poolT = CT(pool, 28, 52, 'pool contract', {size: 32, fill: C.teal});
@@ -638,7 +641,7 @@ const pEth = CT(pool, 420, 244, 'ETH', {size: 18, fill: C.dim});
 const pEthV = CT(pool, 420, 274, 'backs the notes, pays gas', {size: 20});
 const pDiv2 = CLine(pool, 20, 344, 740, 344, C.rule);
 const pVer = CT(pool, 28, 386, '<c>VERIFY</c> frame', {size: 26, fill: C.green});
-const pVerSub = CT(pool, 28, 416, 'reads frames 0, 2 and 3 with <c>FRAMEPARAM</c> and <c>FRAMEDATACOPY</c>', {size: 17, fill: C.dim});
+const pVerSub = CT(pool, 28, 416, 'reads the transaction with <c>TXPARAM</c>, <c>FRAMEPARAM</c> and <c>FRAMEDATACOPY</c>', {size: 17, fill: C.dim});
 const CHK = [
   'frame 2 is a leanSTARK dependency with our <c>program_id</c>',
   '<c>data_hash</c> = keccak(frame 3 inputs, binding)',
@@ -646,14 +649,16 @@ const CHK = [
   'nonce keys = nullifiers, at sequence 0',
   'frame 0 names our root source and <m>r</m>',
   'fee covers the gas',
+  'exactly these four frames, and our domain',
+  'frame 3 has enough gas, and our tree has room',
 ];
 const pChk = CHK.map((s, i) => CT(pool, 72, 456 + 36 * i, s, {size: 20}));
 const pChkM = CHK.map((s, i) => Check(...at(pool, 46, 450 + 36 * i), C.green, {parent: pool, k: 0.8}));
-const pApp = CT(pool, 72, 676, '→ <c>APPROVE</c>(execution and payment)', {size: 21, fill: C.green});
-const pDiv3 = CLine(pool, 20, 694, 740, 694, C.rule);
-const pSen = CT(pool, 28, 732, '<c>SENDER</c> frame', {size: 26, fill: C.blue});
-const pSenSub = CT(pool, 28, 764, 'settle: add <m>cm</m><sub>1</sub> and <m>cm</m><sub>2</sub> to the tree', {size: 20});
-beat(2, 8, (t) => {
+const pApp = CT(pool, 72, 748, '→ <c>APPROVE</c>(execution and payment)', {size: 21, fill: C.green});
+const pDiv3 = CLine(pool, 20, 766, 740, 766, C.rule);
+const pSen = CT(pool, 28, 804, '<c>SENDER</c> frame', {size: 26, fill: C.blue});
+const pSenSub = CT(pool, 28, 836, 'settle: add <m>cm</m><sub>1</sub> and <m>cm</m><sub>2</sub> to the tree', {size: 20});
+beat(2, 10, (t) => {
   A.cam(t, 2.2, {cx: 2330, cy: 450, z: 0.93});
   A.fadeOut(piAuth, t, 0.5);
   A.draw(pool, t + 0.8, 1.3); A.write(poolT, t + 1.3, 0.9); A.fadeIn(poolTag, t + 1.6, 0.5); A.draw(pDiv1, t + 1.6, 0.6);
@@ -665,7 +670,7 @@ beat(2, 8, (t) => {
 
 const k1 = Arrow(TX.x + 704, W(0, FY[2] + 42)[1], PC.x - 6, P(0, 450)[1], C.green, {bend: -10});
 const k2 = Arrow(TX.x + 704, W(0, FY[3] + 42)[1], PC.x - 6, P(0, 486)[1], C.blue, {bend: 26});
-beat(2, 14, (t) => {
+beat(2, 20, (t) => {
   A.draw(k1, t + 0.4, 0.8);
   circumC(...W(497, FY[2] + 34), 134, 35, C.green, t + 0.8, {hold: 1.2});
   circumC(...P(488, 156), 134, 35, C.green, t + 0.8, {hold: 1.2});
@@ -681,21 +686,26 @@ beat(2, 14, (t) => {
   circum(...W(14, FY[0] - 6), 692, FH + 12, C.blue, t + 7.9, {hold: 1.1});
   A.fadeIn(pChk[4], t + 8.1, 0.5, {dx: -10}); A.draw(pChkM[4], t + 8.7, 0.5);
   A.fadeIn(pChk[5], t + 9.4, 0.5, {dx: -10}); A.draw(pChkM[5], t + 10.0, 0.5);
-  A.write(pApp, t + 10.6, 1.1);
-  circum(...W(14, FY[1] - 6), 692, FH + 12, C.green, t + 11.6, {hold: 1.4});
-  A.draw(f1ok, t + 12.2, 0.5);
+  circum(TX.x + 14, TX.y + FY[0] - 6, 692, FY[3] + FH - FY[0] + 12, C.green, t + 10.4, {hold: 1.0});
+  A.fadeIn(pChk[6], t + 10.6, 0.5, {dx: -10}); A.draw(pChkM[6], t + 11.2, 0.5);
+  circum(...W(14, FY[3] - 6), 692, FH + 12, C.blue, t + 11.6, {hold: 1.0});
+  A.pulse([pTree.slots[5], pTree.slots[6]], t + 11.8, 0.8, 1.5);
+  A.fadeIn(pChk[7], t + 11.8, 0.5, {dx: -10}); A.draw(pChkM[7], t + 12.4, 0.5);
+  A.write(pApp, t + 13.0, 1.1);
+  circum(...W(14, FY[1] - 6), 692, FH + 12, C.green, t + 14.0, {hold: 1.4});
+  A.draw(f1ok, t + 14.6, 0.5);
 });
 
-beat(2, 10, (t) => {
+beat(2, 17, (t) => {
   circumC(...W(295, 156), 96, 34, C.blue, t + 0.3, {hold: 2.4});
   A.fadeIn(nAnn, t + 0.8, 0.6, {dx: -10});
   A.pulse(hNonceTag, t + 1.2, 0.7, 1.2);
-  circumC(...W(284, FY[0] + 58), 28, 32, C.blue, t + 4.4, {hold: 2.4});
+  circumC(...W(282, FY[0] + 61), 16, 18, C.blue, t + 4.4, {hold: 2.4});
   A.fadeIn(rAnn, t + 4.9, 0.6, {dx: -10});
   A.pulse(fRtag, t + 5.3, 0.7, 1.2);
 });
 
-const kS = Arrow(TX.x + 704, W(0, FY[3] + 50)[1], PC.x - 6, P(0, 724)[1], C.blue, {bend: -12});
+const kS = Arrow(TX.x + 704, W(0, FY[3] + 50)[1], PC.x - 6, P(0, 796)[1], C.blue, {bend: -12});
 beat(2, 7, (t) => {
   A.draw(kS, t + 0.4, 0.8);
   circum(...W(14, FY[3] - 6), 692, FH + 12, C.blue, t + 0.6, {hold: 1.6});
@@ -717,9 +727,9 @@ const vBox = [['prover 1', 'proves the program today'], ['prover 2, a new proof 
   .map(([a, b], i) => { const m = Card(VX[i] - 245, VY + 60, 490, 130, C.grey, {fo: 0.05}); CT(m, 245, 54, a, {size: 26, anchor: 'middle', o: 1}); CT(m, 245, 96, b, {size: 21, anchor: 'middle', fill: C.dim, o: 1}); return m; });
 const vOk = VX.map((x) => Check(x - 96, VY + 236, C.green));
 const vOkT = VX.map((x) => Txt(x - 72, VY + 244, 'the pool accepts it', {size: 22, fill: C.green}));
-const vFoot = Txt(2330, 1700, 'Published versions never change, and each fork keeps them provable.', {size: 26, anchor: 'middle'});
+const vFoot = Txt(2330, 1700, 'Activated ISA versions never change, and each fork keeps them provable.', {size: 26, anchor: 'middle'});
 const versioning = [vTitle, vSub, vLine, vDots, vForks, vChip, vBox, vOk, vOkT, vFoot];
-beat(2, 14, (t) => {
+beat(2, 18, (t) => {
   A.cam(t + 0.2, 2.2, {cx: 2330, cy: 1450, z: 0.93});
   A.write(vTitle, t + 1.6, 1.4); A.fadeIn(vSub, t + 2.6, 0.6);
   A.draw(vLine, t + 3.4, 0.9); A.fadeIn(vDots, t + 3.6, 0.4, {lag: 0.2, s0: 0.3}); A.fadeIn(vForks, t + 3.7, 0.5, {lag: 0.2});
@@ -742,7 +752,7 @@ const EDGES = ['AB', 'AC', 'AD', 'BD', 'CD', 'BE', 'CF', 'DE', 'DF', 'EG', 'FG',
 const aliceEnv = MiniEnv(3150, 470); aliceEnv.base.s = 1.5;
 const mpLbl = Txt(3800, 96, 'mempool nodes', {size: 26, anchor: 'middle', fill: C.dim});
 beat(3, 10, (t) => {
-  A.fadeOut(pool, t, 0.8); A.fadeOut([versioning, bindLbl], t, 0.6);
+  A.fadeOut(pool, t, 0.8); A.fadeOut([versioning, bindLbl], t, 0.6); A.fadeOut([f1ok, nAnn, rAnn], t, 0.6);
   A.cam(t + 0.3, 2.0, {cx: 1170, cy: 450, z: 0.69});
   A.to(tx, t + 1.0, 1.4, {x: 1780, y: 450, s: 0.72});
   A.to(pi, t + 1.0, 1.4, {x: 2140, y: 450});
@@ -762,32 +772,32 @@ const nPanel = Card(NPp.x, NPp.y, NPp.w, NPp.h, C.purple, {fill: C.stage, fo: 0.
 const npT = CT(nPanel, 20, 32, 'inside a mempool node', {size: 16, fill: C.dim});
 const npPi = Token(...at(nPanel, 44, 92), '<m>π</m>', C.yellow, {r: 16, sw: 2.2, parent: nPanel});
 const np1 = CT(nPanel, 76, 96, '<m>π</m> verifies for (<c>data_hash</c>, <c>program_id</c>)', {size: 18});
-const np1s = CT(nPanel, 76, 120, 'the verifier its fork specifies for the scheme, outside the EVM', {size: 14, fill: C.dim});
+const np1s = CT(nPanel, 76, 120, 'the verifier the current fork specifies, outside the EVM', {size: 14, fill: C.dim});
 const np1c = Check(...at(nPanel, 506, 96), C.green, {parent: nPanel, k: 0.75});
-const npEvm = CBox(nPanel, 26, 172, 36, 26, C.green, {r: 5, sw: 1.8});
-const npEvmT = CT(nPanel, 44, 190, 'EVM', {size: 11, fill: C.green, anchor: 'middle'});
-const np2 = CT(nPanel, 76, 190, '<c>VERIFY</c>(pool) calls <c>APPROVE</c>', {size: 18});
-const np2s = CT(nPanel, 76, 214, 'the validation prefix, at most 100,000 gas', {size: 14, fill: C.dim});
-const np2c = Check(...at(nPanel, 506, 190), C.green, {parent: nPanel, k: 0.75});
-const np3 = CT(nPanel, 76, 284, 'root recent, nonce keys unused', {size: 18});
-const np3s = CT(nPanel, 76, 308, 'frame 0 passes, keys not yet used on chain', {size: 14, fill: C.dim});
-const np3c = Check(...at(nPanel, 506, 284), C.green, {parent: nPanel, k: 0.75});
+const np3 = CT(nPanel, 76, 190, 'nonce keys unused, root recent', {size: 18});
+const np3s = CT(nPanel, 76, 214, 'keys checked before any frame runs, then frame 0 passes', {size: 14, fill: C.dim});
+const np3c = Check(...at(nPanel, 506, 190), C.green, {parent: nPanel, k: 0.75});
+const npEvm = CBox(nPanel, 26, 266, 36, 26, C.green, {r: 5, sw: 1.8});
+const npEvmT = CT(nPanel, 44, 284, 'EVM', {size: 11, fill: C.green, anchor: 'middle'});
+const np2 = CT(nPanel, 76, 284, '<c>VERIFY</c>(pool) calls <c>APPROVE</c>', {size: 18});
+const np2s = CT(nPanel, 76, 308, 'validation prefix (frames 0 and 1), at most 100,000 execution gas', {size: 14, fill: C.dim});
+const np2c = Check(...at(nPanel, 506, 284), C.green, {parent: nPanel, k: 0.75});
 const npAcc = CT(nPanel, 20, 356, 'accept, then keep it for aggregation', {size: 17, fill: C.green});
 const others = [N.B, N.C, N.D, N.E, N.F, N.G];
 const dimmed = [...others, ...EDGES, mpLbl];
-beat(3, 12, (t) => {
+beat(3, 14, (t) => {
   A.to(aliceEnv, t, 0.8, {x: 3250, y: 470, s: 0.5}); A.fadeOut(aliceEnv, t + 0.5, 0.4);
   A.pulse(N.A, t + 0.8, 0.6, 1.2);
   A.cam(t + 0.8, 1.8, {cx: 3480, cy: 470, z: 2});
   A.to(dimmed, t + 0.8, 1.2, {o: 0.22});
   A.draw(nPanel, t + 1.8, 0.9); A.fadeIn(npT, t + 2.2, 0.5);
   A.fadeIn([npPi, np1, np1s], t + 2.8, 0.6, {lag: 0.2}); A.draw(np1c, t + 4.6, 0.5);
-  A.fadeIn([npEvm, npEvmT, np2, np2s], t + 5.2, 0.6, {lag: 0.15}); A.draw(np2c, t + 7.0, 0.5);
-  A.fadeIn([np3, np3s], t + 7.6, 0.6, {lag: 0.2}); A.draw(np3c, t + 9.0, 0.5);
+  A.fadeIn([np3, np3s], t + 5.2, 0.6, {lag: 0.2}); A.draw(np3c, t + 7.0, 0.5);
+  A.fadeIn([npEvm, npEvmT, np2, np2s], t + 7.6, 0.6, {lag: 0.15}); A.draw(np2c, t + 9.0, 0.5);
   A.fadeIn(npAcc, t + 9.8, 0.6);
 });
 
-const arrivals = [['A', 2990, 240], ['A', 3000, 760], ['B', 3470, -40], ['C', 3600, 960], ['E', 4160, -40], ['F', 4040, 960], ['F', 4660, 880], ['G', 4680, 380]]
+const arrivals = [['A', 2990, 240], ['A', 3000, 760], ['B', 3470, -40], ['C', 3600, 960], ['D', 3820, 960], ['E', 4160, -40], ['F', 4040, 960], ['F', 4660, 880], ['G', 4680, 380]]
   .map(([k, sx, sy]) => { const m = MiniEnv(sx, sy); m.dest = NP_[k]; return m; });
 const aPis = [[-66, -36], [-66, 40], [4, -76]].map(([dx, dy]) => Token(3250 + dx, 470 + dy, '<m>π</m>', C.yellow, {r: 19, sw: 2.4}));
 const PiAt = (k) => [NP_[k][0] + 42, NP_[k][1] - 46];
@@ -815,7 +825,7 @@ beat(3, 12, (t) => {
   A.fadeOut([mpLbl, every], t, 0.5); A.fadeIn(gossipLbl, t + 0.4, 0.8);
   [['A', 'B'], ['A', 'C'], ['A', 'D']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 1.2 + i * 0.2, 1.4, nodePi[b]));
   [['D', 'E'], ['D', 'F'], ['D', 'G'], ['B', 'E'], ['C', 'F']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 3.4 + i * 0.2, 1.4, nodePi[b]));
-  [['E', 'G'], ['F', 'G']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 5.8 + i * 0.2, 1.4, nodePi[b]));
+  [['E', 'G'], ['F', 'G']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 5.8 + i * 0.6, 1.4, nodePi[b]));
   A.fadeIn(hashNote, t + 8.0, 0.8);
 });
 
@@ -833,7 +843,7 @@ beat(4, 10, (t) => {
   travel([4380, 460], [4760, 460], t + 2.0, 1.2, bNode);
   travel([4380, 460], [4760, 460], t + 2.5, 1.2, bNode);
   A.fadeIn(tiles, t + 3.4, 0.4, {lag: 0.12, s0: 0.5});
-  A.draw(dropX, t + 5.0, 0.4); A.fadeOut([tiles[5], dropX], t + 5.8, 0.5);
+  A.draw(dropX, t + 5.0, 0.4); A.fadeOut([tiles[5], dropX], t + 10.0, 0.5);
   A.fadeIn(PiB, t + 6.6, 0.7, {s0: 0.3}); A.fadeIn(PiBLbl, t + 7.2, 0.5);
 });
 
@@ -842,7 +852,7 @@ const blockT = CT(block, 22, 40, 'block', {size: 28});
 const hdr = Card(5020, 140, 420, 200, C.grey, {fo: 0.04, sw: 2});
 const hdrT = CT(hdr, 18, 32, 'header', {size: 20, fill: C.dim});
 const hdrF = CT(hdr, 18, 70, '<c>recursive_stark</c>', {size: 22});
-const spLbl = CT(hdr, 90, 190, '<c>stark_proof</c>', {size: 15, fill: C.dim, anchor: 'middle'});
+const spLbl = CT(hdr, 90, 190, '<c>stark_proof</c>', {size: 17, fill: C.dim, anchor: 'middle'});
 const bdh = CChip(hdr, 285, 138, 'block_deps_hash', C.blueL);
 const body = Card(5020, 360, 420, 440, C.grey, {fo: 0.04, sw: 2});
 const bodyT = CT(body, 18, 32, 'body', {size: 20, fill: C.dim});
@@ -854,16 +864,16 @@ const rows = RYL.map((y, i) => {
   rich(m.inner, -196 + 20, 7, alice ? 'Alice’s tx' : 'tx', {size: 20, fill: alice ? C.blue : C.ink});
   if (hasDep[i]) {
     [C.grey, C.blueL, C.green].forEach((c, j) => shape(m, rr(40 + j * 28, -11, 22, 22, 4), {stroke: c, sw: 2, fill: c, fo: 0.3, draw: false}));
-    rich(m.inner, 136, 6, '96 B', {size: 16, fill: C.faint});
+    rich(m.inner, 136, 6, '96 B', {size: 18, fill: C.dim});
   }
   return m;
 });
 const rowW = (i) => [5020 + 14 + 196, 360 + RYL[i] + 32];
 const depCurves = [0, 1, 3].map((i) => { const [, y] = rowW(i); return Curve(`M5428,${y} Q5500,${y} 5500,${(y + 278) / 2} T5402,278`, C.blueL, {sw: 2}); });
-const depHashLbl = Txt(5512, 350, 'hash', {size: 18, fill: C.dim});
+const depHashLbl = Txt(5512, 450, 'hash', {size: 18, fill: C.dim});
 const ghostPi = Token(5600, rowW(1)[1], '<m>π</m>', C.yellow, {r: 20, sw: 2.5});
 const ghostX = Cross(5600, rowW(1)[1], C.red, {k: 1.1});
-const ghostLbl = Txt(5600, rowW(1)[1] + 54, 'not in the block', {size: 18, fill: C.dim, anchor: 'middle'});
+const ghostLbl = Txt(5600, rowW(1)[1] + 54, 'her <m>π</m> is not in the block', {size: 18, fill: C.dim, anchor: 'middle'});
 beat(4, 12, (t) => {
   A.cam(t, 1.8, {cx: 5400, cy: 450, z: 1});
   A.draw(block, t + 0.4, 1.2); A.fadeIn(blockT, t + 1.0, 0.5);
@@ -880,12 +890,12 @@ beat(4, 12, (t) => {
   A.draw(depCurves, t + 5.8, 1.0, {lag: 0.15}); A.fadeIn(depHashLbl, t + 6.4, 0.5);
   A.fadeIn(bdh, t + 6.8, 0.6, {s0: 0.6}); A.pulse(bdh, t + 7.5, 0.7, 1.1);
   A.fadeIn(ghostPi, t + 8.4, 0.4); A.draw(ghostX, t + 8.9, 0.4); A.fadeIn(ghostLbl, t + 9.0, 0.5);
-  A.fadeOut([ghostPi, ghostX, ghostLbl], t + 10.8, 0.6);
+  A.fadeOut([ghostPi, ghostX, ghostLbl], t + 12.0, 0.6);
 });
 
 const vals = [5620, 5760, 5900].map((x) => Node(x, 170, {r: 24, col: C.ink}));
 const valsL = Txt(5760, 232, 'validators', {size: 22, fill: C.dim, anchor: 'middle'});
-const VC = ['<c>block_deps_hash</c> = hash(all dependencies)', 'one STARK verifies against <c>AGGREGATED_VK</c>', 'every transaction is valid'];
+const VC = ['<c>block_deps_hash</c> = hash(all dependencies)', 'one STARK verifies against that hash and <c>AGGREGATED_VK</c>', 'every transaction is valid'];
 const vChk = VC.map((s, i) => Txt(5604, 306 + 48 * i, s, {size: 20}));
 const vChkM = VC.map((s, i) => Check(5580, 300 + 48 * i, C.green, {k: 0.8}));
 const vFl = [0, 1, 3].map((i) => Flash(depCurves[i === 0 ? 0 : i === 1 ? 1 : 2].pathD, C.yellow, {sw: 5}));
@@ -938,11 +948,12 @@ const rowLbl = [['witness', C.red], ['proof <m>π</m>', C.yellow], ['statement',
 const dot = (x, y, c) => { const m = new M(x, y, null, 0); shape(m, circ(0, 0, 9), {stroke: c, sw: 3, fill: c, fo: 1, draw: false}); return m; };
 const seg = (x1, x2, y, c) => Curve(`M${x1},${y} L${x2},${y}`, c, {sw: 5});
 const r0 = [dot(RX[0], RY[0], C.red), Lock(RX[0] + 44, RY[0] + 2, C.red, {k: 0.9}), Txt(RX[0] + 76, RY[0] + 8, 'never leaves the device', {size: 20, fill: C.dim})];
+const r1bg = new M(RX[3], RY[1], null, 0); shape(r1bg, circ(0, 0, 18), {fill: C.stage, fo: 1});
 const r1 = {
-  segs: [seg(RX[0], RX[1], RY[1], C.yellow), seg(RX[1], RX[2], RY[1], C.gold), seg(RX[2], RX[3], RY[1], C.gold)],
+  segs: [seg(RX[0], RX[1], RY[1], C.yellow), seg(RX[1], RX[2], RY[1], C.gold), seg(RX[2], RX[3] - 20, RY[1], C.gold)],
   dots: [dot(RX[0], RY[1], C.yellow), dot(RX[1], RY[1], C.gold), dot(RX[2], RY[1], C.gold)],
   end: Token(RX[3], RY[1], 'Π', C.gold, {r: 18, sw: 2.6}),
-  sub: [Txt(RX[1], RY[1] + 38, 'merged', {size: 16, fill: C.faint, anchor: 'middle'}), Txt(RX[2], RY[1] + 38, 'merged again', {size: 16, fill: C.faint, anchor: 'middle'})],
+  sub: [Txt(RX[1] + 12, RY[1] + 38, 'merged', {size: 16, fill: C.dim}), Txt(RX[2] + 12, RY[1] + 38, 'merged again', {size: 16, fill: C.dim})],
   ann: Txt(RX[3] + 36, RY[1] + 7, 'one STARK per block', {size: 20, fill: C.dim}),
 };
 const r2 = {segs: [seg(RX[0], RX[3], RY[2], C.blue)], dots: RX.map((x) => dot(x, RY[2], C.blue)), ann: [Txt(RX[3] + 36, RY[2] - 4, 'in the <c>SENDER</c> frame;', {size: 18, fill: C.dim}), Txt(RX[3] + 36, RY[2] + 20, 'the binding is recomputed', {size: 18, fill: C.dim})]};
@@ -951,7 +962,7 @@ const r3 = {
   ann: [Txt(RX[3] + 36, RY[3] - 4, '96 bytes, hashed into', {size: 18, fill: C.dim}), Txt(RX[3] + 36, RY[3] + 20, '<c>block_deps_hash</c>', {size: 18, fill: C.dim})],
 };
 const chkLbl = Txt(7630, 676, 'checks', {size: 22, fill: C.dim});
-const chkCols = ['proves the relation', 'verify <m>π</m>, run <c>VERIFY</c>', 'verifies and merges', 'one STARK, then execute']
+const chkCols = ['proves the statement', 'verifies <m>π</m>, runs <c>VERIFY</c>', 'verifies and merges', 'verifies one STARK, then executes']
   .map((s, i) => Txt(RX[i], 676, s, {size: 18, fill: C.ink, anchor: 'middle'}));
 beat(5, 15, (t) => {
   A.fadeIn(curtain, t, 0.7);
@@ -961,7 +972,7 @@ beat(5, 15, (t) => {
   A.fadeIn(rowLbl[0], t + 2.2, 0.5, {dx: -10}); A.fadeIn(r0, t + 2.7, 0.5, {lag: 0.3});
   A.fadeIn(rowLbl[1], t + 4.4, 0.5, {dx: -10});
   r1.segs.forEach((s, i) => { A.fadeIn(r1.dots[i], t + 4.8 + i * 0.7, 0.3); A.draw(s, t + 4.9 + i * 0.7, 0.6, {e: lin}); });
-  A.fadeIn(r1.sub, t + 5.6, 0.4, {lag: 0.7}); A.fadeIn(r1.end, t + 7.0, 0.4, {s0: 0.4}); A.fadeIn(r1.ann, t + 7.3, 0.5);
+  A.fadeIn(r1.sub, t + 5.6, 0.4, {lag: 0.7}); A.fadeIn([r1bg, r1.end], t + 7.0, 0.4, {s0: 0.4}); A.fadeIn(r1.ann, t + 7.3, 0.5);
   A.fadeIn(rowLbl[2], t + 7.6, 0.5, {dx: -10});
   A.fadeIn(r2.dots, t + 8.0, 0.3, {lag: 0.35}); A.draw(r2.segs, t + 8.0, 1.2); A.fadeIn(r2.ann, t + 9.3, 0.5, {lag: 0.2});
   A.fadeIn(rowLbl[3], t + 9.8, 0.5, {dx: -10});
@@ -1045,6 +1056,7 @@ function show(tt) {
   const p = 100 * t / TOTAL;
   fill.style.width = p + '%'; knob.style.left = p + '%';
   scrub.setAttribute('aria-valuenow', String(Math.round(t)));
+  scrub.setAttribute('aria-valuetext', `${mmss(t)} of ${mmss(TOTAL)}, step ${i + 1} of ${BEATS.length}`);
   timeEl.textContent = `${mmss(t)} / ${mmss(TOTAL)}`;
   playIcon.setAttribute('d', playing ? 'M6 4h4.5v16H6zM13.5 4H18v16h-4.5z' : 'M7 4l14 8-14 8z');
   playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
@@ -1088,7 +1100,8 @@ scrub.addEventListener('pointermove', (e) => { if (dragging) seekX(e); });
 scrub.addEventListener('pointerup', () => { dragging = false; });
 scrub.addEventListener('pointercancel', () => { dragging = false; });
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest && e.target.closest('select, input, textarea, summary')) return;
+  if (e.target.closest && e.target.closest('select, input, textarea')) return;
+  if (e.key === ' ' && e.target.closest && e.target.closest('summary')) return;
   if (e.key === ' ' || e.key === 'k') { e.preventDefault(); toggle(); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
