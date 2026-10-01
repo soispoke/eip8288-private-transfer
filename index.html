@@ -400,27 +400,27 @@ function travel(from, to, t, d, target) {
 /* ---------------- words ---------------- */
 const CAP = [
   'Alice pays Bob from a shielded pool. We follow her transaction from her wallet to a block and look at what each party checks along the way.',
-  'Alice holds two notes in a shielded pool, worth 0.9 and 0.5 ETH. She wants to pay Bob 1.2 ETH without revealing her notes, the amounts or who she pays.',
+  'Alice holds two notes in the pool, worth 0.9 and 0.5 ETH, and she wants to pay Bob 1.2 ETH without revealing her notes, the amounts or who she pays.',
   'Her wallet keeps the secret inputs to the proof: the notes she spends, the key that owns them, the Merkle paths showing they are in the tree, and the two new notes. This is the witness.',
   'The statement is what everyone sees: the tree root her paths lead to, one nullifier per spent note so it can’t be spent twice, one commitment per new note, the fee, and the binding, a hash of this transaction. Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent.',
-  'Her wallet runs the pool’s program on leanVM and proves that the statement satisfies the relation for some witness. The result is a zero-knowledge STARK, π, which reveals nothing about the witness.',
-  'The proof will be checked against two 32-byte values: `data_hash`, a hash of the statement, and `program_id`, a hash of the pool’s program and its ISA version. The proposed program scheme puts `program_id` where today’s EIP-8288 has a verification key hash.',
-  'The wallet builds one frame transaction. The first frame names the recent root, the pool’s `VERIFY` frame asks the pool to approve, the dependency frame holds `data_hash` and `program_id`, and the `SENDER` frame carries the public inputs. The binding sits in no frame. It is a hash of this transaction, so the wallet builds the transaction before it proves.',
+  'Her wallet runs the pool’s program on leanVM and proves that the statement and her witness satisfy the pool’s rules, the relation its program encodes. The result is a zero-knowledge STARK, π, which reveals nothing about the witness.',
+  'The proof will be checked against two values: `data_hash`, a hash of the statement, and `program_id`, a hash of the pool’s program and the version of its instruction set (ISA). The proposed program scheme puts `program_id` where today’s EIP-8288 has a verification key hash.',
+  'Alice’s frame transaction has four frames. The first checks the root, the pool’s `VERIFY` frame asks the pool to approve, the dependency frame requires a proof for `data_hash` and `program_id`, and the `SENDER` frame carries the public inputs, the statement without its binding. Since the binding is a hash of this transaction, the wallet actually builds the transaction before it proves.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the nonce keys, and her root is in the first frame. There is no signature, because the proof is bound to this exact transaction and authorizes it.',
-  'The pool is an ordinary contract on L1. It holds the note tree and the pool’s ETH, and it pins `program_id`, which names its program and the ISA version. It never verifies a proof itself.',
-  'When nodes and validators run the pool’s `VERIFY` frame, the pool reads the transaction. It checks that the dependency names its own `program_id` and the hash of what it will settle, and that the binding matches this transaction. It also checks the nonce keys, the root source, the fee and the frame list, and that the spend will settle. Then it approves and agrees to pay.',
-  'Two protocol rules back this up, as long as the pool checks the right things. A nonce key at sequence 0 can be consumed only once, so two spends of the same note can’t both be included. And the first frame fails unless the root is recent, while the pool makes sure it comes from its own root source.',
-  'The `SENDER` frame only runs once the transaction is in a block. The pool then appends the two new commitments to its tree.',
-  'The proposed `0x11` puts the ISA version inside `program_id`, so the id always means the same program under the same rules. When a fork brings a new prover, wallets prove the same program with it. If the prover’s machine changes, meaning the ISA it runs natively, the old ISA runs through an interpreter. An immutable pool keeps working without anyone moving funds.',
-  'The proof is not part of the transaction. The wallet sends the two side by side in a mempool wrapper, and the witness never leaves Alice’s device.',
-  'The node verifies π outside the EVM, with the verifier the current fork specifies for the scheme. Then it runs the first two frames against its own copy of the state, and it only accepts the transaction if the root is recent and the pool approves.',
+  'The pool is an ordinary contract on L1. It holds the note tree and the ETH behind the notes, pins its `program_id` when it is deployed, but never verifies a proof itself.',
+  'Instead, when nodes and validators run the pool’s `VERIFY` frame, the pool checks that the dependency names its pinned `program_id` and the `data_hash` it recomputes from the public inputs and this transaction’s binding. It also checks the nonce keys, the root source, the fee and the frame list, and that the spend will settle. Then it approves and agrees to pay for gas.',
+  'Two of these checks rely on protocol rules. A nonce key at sequence 0, which the pool requires, can be consumed only once, so two spends of the same note can’t both be included. The first frame fails unless the root is recent, while the pool makes sure it comes from its own root source.',
+  'The `SENDER` frame runs only when the transaction is in a block, and the pool then appends the two new commitments to its tree.',
+  'Since an immutable pool can’t change its pinned id, the proposed program scheme puts the ISA version inside `program_id`, so the id always means the same program under the same rules. When a fork brings a new proof system, wallets prove the same program with it, and if the prover’s native ISA changes, the program runs through an interpreter. Either way, the pool keeps working without anyone moving funds.',
+  'Back on Alice’s device, her wallet sends the transaction and its proof side by side in a mempool wrapper, because the proof is not part of the transaction. The witness never leaves the device.',
+  'The receiving node verifies π outside the EVM, with the verifier the current fork specifies. It then checks that her nonce keys are unused and runs the first two frames on its copy of the state, accepting the transaction only if the root is recent and the pool approves.',
   'Other wallets send their wrappers too. Every second, each node merges the proofs of all the valid transactions it holds into one recursive STARK.',
-  'Nodes forward one wrapper per round with a single recursive STARK, and they send only a hash for transactions they already broadcast. However many transactions there are, each wrapper carries one proof.',
+  'Each node then forwards one wrapper with its transactions and that single STARK, sending only a hash for any transaction it already broadcast.',
   'A builder picks the transactions for its block, drops the dependencies of anything it leaves out and merges the remaining proofs into one final recursive STARK.',
   'The header carries that STARK and `block_deps_hash`, a hash of every dependency in the block. The body keeps the transactions, with a 96-byte entry for each dependency. No individual proof goes on chain.',
   'Validators recompute that hash from the body, verify the one STARK for the whole block, and then execute the transactions as usual.',
   'When Alice’s transaction runs, the pool approves it again, which uses up her two nonce keys and makes the pool pay for gas. The `SENDER` frame then adds Bob’s note and her change to the tree, under a new root.',
-  'The witness never left Alice’s device, and her proof was merged into larger proofs at the mempool and again at the builder. The chain keeps the statement, a 96-byte dependency entry and one STARK per block.',
+  'The witness never left Alice’s device, and her proof was merged with other proofs in the mempool and again by the builder. The chain keeps the statement, a 96-byte dependency entry and one STARK per block.',
   'Every proof in this flow is a hash-based STARK, and no contract verifies one. The pool checks public inputs, while nodes and validators check the proofs.',
 ];
 const NOTE = [
@@ -429,7 +429,7 @@ const NOTE = [
   'The witness is the private input to the relation. To build the Merkle paths, the wallet keeps a synced copy of the pool’s note tree.',
   'A note’s commitment is `hash(inner, value)` with `inner = hash(owner key, rho)` and `owner key = hash(spending key)`, so the amount (the note’s `value`) stays hidden, and the proof checks that input values equal output values plus `public_amount` plus the fee. In the MSP the statement also carries a domain (which commits to the chain, the pool and the tree epoch), a public amount and a recipient. The binding is `keccak(0x06 || rlp(tx))` with the dependency frame’s data left out, since that frame holds `data_hash`. No frame carries the binding, and the pool has to rebuild it, because `TXPARAM(0x08)` covers the dependency frame. EIP-8288 doesn’t yet say how dependency frames enter the signature hash (its own test case reads `msghash` from `TXPARAM`), so this elision is an assumption here. Around the statement, the chain also sees the rest of the transaction: the pool as sender, the nonce keys (equal to the nullifiers), the root tuple, the dependency, the gas fields, and its timing and size. A real pool would also post encrypted notes so Bob can find his.',
   'leanVM is the zkVM and leanSTARK its proof system. A private transaction needs leanSTARK with zero knowledge; the leanVM commit pinned in the post’s EVM spend benchmark has no zero knowledge yet.',
-  'Proposed program scheme for `0x11`: the third field of the 96-byte entry holds `program_id = hash(ISA version, program bytes)` instead of a verification key hash. For an EVM program the version is the fork whose rules it runs under. The program’s public output is `data_hash` itself: the program hashes the statement inside the proof, and the pool recomputes that hash in its `VERIFY` frame, so the hash should be cheap in both places. The animation uses Keccak-256, which is cheap in the EVM but would need a zkVM precompile in leanVM. Each fork specifies the verifier behind the scheme; the 30,000 gas and the mempool’s limit of one STARK per transaction stay as in EIP-8288.',
+  'Proposed program scheme for `0x11`: the third field of the 96-byte entry holds `program_id = hash(ISA version, program bytes)` instead of a verification key hash. In the 96-byte entry, `data_hash` fills the second field, and each of the three fields is 32 bytes. For an EVM program the version is the fork whose rules it runs under. The program’s public output is `data_hash` itself: the program hashes the statement inside the proof, and the pool recomputes that hash in its `VERIFY` frame, so the hash should be cheap in both places. The animation uses Keccak-256, which is cheap in the EVM but would need a zkVM precompile in leanVM. Each fork specifies the verifier behind the scheme; the 30,000 gas and the mempool’s limit of one STARK per transaction stay as in EIP-8288.',
   'Frame 0 is EIP-8272’s recent root verifier frame: a `VERIFY` frame to the recent root contract at `0x…8272` with 72-byte `(source_id, slot, root)` tuples, placed before every frame except an optional `expiry_verify` frame. Frame 2 has `DEP_VERIFY_FRAME_MODE` = 3 (EIP-8288): no target, value 0, flags 0 and a gas limit of 30,000 per STARK. It comes after the pool’s `VERIFY` frame, so the validation prefix (the frames up to and including the one that sets the payer) keeps a shape EIP-8141 and EIP-8272 recognize. `VERIFY` = 1 and `SENDER` = 2 (EIP-8141). Mempool policy allows one leanSTARK dependency per transaction (`MAX_STARKS_PER_TX` = 1).',
   '`sender` = pool, and the pool’s `VERIFY` frame has flags `0x3`, which allow `APPROVE` of execution and payment, so the pool is both sender and payer. Here the nullifiers are EIP-8250 nonce keys at sequence 0, and `signatures` is empty because the proof’s binding replaces the secp256k1 signature from an `authorizer` address that today’s MSP requires. Other transactions that call the pool (shields, claims and root publications) come from ordinary accounts and still carry a leanSPHINCS signature dependency. The recent root verifier frame has flags 0, so it can only pass or fail.',
   '`program_id` is fixed when the pool is deployed. Because it names a program and an ISA version rather than one prover’s verification key, it keeps its meaning when a fork changes the prover.',
@@ -529,7 +529,7 @@ const fW = Flash(aW.pathD, C.red), fR = Flash(aR.pathD, C.green), fS = Flash(aS.
 const aP = Arrow(665, 678, 665, 728, C.yellow);
 const pi = Token(665, 774, '<m>π</m>', C.yellow, {r: 38});
 const piLbl = Txt(718, 782, 'zero-knowledge STARK', {size: 20, fill: C.dim});
-beat(1, 10, (t) => {
+beat(1, 11, (t) => {
   A.draw(rel, t, 1.2); A.write(relT, t + 0.6, 0.8); A.fadeIn(relSub, t + 0.9, 0.5);
   A.fadeIn(relRows, t + 1.3, 0.5, {lag: 0.35, dx: -10}); A.fadeIn(relVk, t + 2.9, 0.5);
   A.draw(prover, t + 3.2, 0.9); A.fadeIn(proverT, t + 3.6, 0.5);
@@ -543,7 +543,7 @@ const aVk = Arrow(665, 524, 665, 588, C.green), lVk = Txt(682, 562, 'hash', {siz
 const vkChip = Chip(665, 612, 'program_id', C.green);
 const aDh = Arrow(1030, 524, 1030, 588, C.blueL), lDh = Txt(1047, 562, 'Keccak-256', {size: 19, fill: C.dim});
 const dhChip = Chip(1030, 612, 'data_hash', C.blueL);
-beat(1, 12, (t) => {
+beat(1, 13, (t) => {
   A.fadeOut([prover, aW, aR, aS, aP], t, 0.6);
   A.draw(aDh, t + 0.8, 0.6); A.fadeIn(lDh, t + 1.0, 0.4); A.fadeIn(dhChip, t + 1.3, 0.6, {s0: 0.5});
   A.draw(aVk, t + 2.6, 0.6); A.fadeIn(lVk, t + 2.8, 0.4); A.fadeIn(vkChip, t + 3.1, 0.6, {s0: 0.5});
@@ -586,7 +586,7 @@ const f2a = CT(tx, 226, FY[3] + 36, 'target: <k=teal>pool</k>', {size: 22});
 const f2b = CT(tx, 226, FY[3] + 66, '<c>settle(</c><k=blue>public inputs</k><c>)</c>', {size: 20});
 const bindLbl = Txt(TX.x + TX.w / 2, 836, 'binding = hash of this transaction, without the dependency frame’s data', {size: 19, fill: C.blueL, anchor: 'middle'});
 const W = (lx, ly) => [TX.x + lx, TX.y + ly]; // world position of a point on the transaction card at its home position
-beat(1, 17, (t) => {
+beat(1, 18, (t) => {
   A.fadeOut([intent, rel, aVk, lVk, aDh, lDh, piLbl], t, 0.6);
   A.cam(t + 0.2, 2.2, {cx: 1600, cy: 450});
   A.to(stm, t + 0.2, 2.2, {x: 1320, y: 330, s: 0.7});
@@ -670,7 +670,7 @@ beat(2, 10, (t) => {
 
 const k1 = Arrow(TX.x + 704, W(0, FY[2] + 42)[1], PC.x - 6, P(0, 450)[1], C.green, {bend: -10});
 const k2 = Arrow(TX.x + 704, W(0, FY[3] + 42)[1], PC.x - 6, P(0, 486)[1], C.blue, {bend: 26});
-beat(2, 20, (t) => {
+beat(2, 19, (t) => {
   A.draw(k1, t + 0.4, 0.8);
   circumC(...W(497, FY[2] + 34), 134, 35, C.green, t + 0.8, {hold: 1.2});
   circumC(...P(488, 156), 134, 35, C.green, t + 0.8, {hold: 1.2});
@@ -696,7 +696,7 @@ beat(2, 20, (t) => {
   A.draw(f1ok, t + 14.6, 0.5);
 });
 
-beat(2, 17, (t) => {
+beat(2, 16, (t) => {
   circumC(...W(295, 156), 96, 34, C.blue, t + 0.3, {hold: 2.4});
   A.fadeIn(nAnn, t + 0.8, 0.6, {dx: -10});
   A.pulse(hNonceTag, t + 1.2, 0.7, 1.2);
@@ -706,7 +706,7 @@ beat(2, 17, (t) => {
 });
 
 const kS = Arrow(TX.x + 704, W(0, FY[3] + 50)[1], PC.x - 6, P(0, 796)[1], C.blue, {bend: -12});
-beat(2, 7, (t) => {
+beat(2, 7.5, (t) => {
   A.draw(kS, t + 0.4, 0.8);
   circum(...W(14, FY[3] - 6), 692, FH + 12, C.blue, t + 0.6, {hold: 1.6});
   A.fadeIn(pSenSub, t + 1.2, 0.6, {dx: -10});
@@ -729,7 +729,7 @@ const vOk = VX.map((x) => Check(x - 96, VY + 236, C.green));
 const vOkT = VX.map((x) => Txt(x - 72, VY + 244, 'the pool accepts it', {size: 22, fill: C.green}));
 const vFoot = Txt(2330, 1700, 'Activated ISA versions never change, and each fork keeps them provable.', {size: 26, anchor: 'middle'});
 const versioning = [vTitle, vSub, vLine, vDots, vForks, vChip, vBox, vOk, vOkT, vFoot];
-beat(2, 18, (t) => {
+beat(2, 20, (t) => {
   A.cam(t + 0.2, 2.2, {cx: 2330, cy: 1450, z: 0.93});
   A.write(vTitle, t + 1.6, 1.4); A.fadeIn(vSub, t + 2.6, 0.6);
   A.draw(vLine, t + 3.4, 0.9); A.fadeIn(vDots, t + 3.6, 0.4, {lag: 0.2, s0: 0.3}); A.fadeIn(vForks, t + 3.7, 0.5, {lag: 0.2});
@@ -785,7 +785,7 @@ const np2c = Check(...at(nPanel, 506, 284), C.green, {parent: nPanel, k: 0.75});
 const npAcc = CT(nPanel, 20, 356, 'accept, then keep it for aggregation', {size: 17, fill: C.green});
 const others = [N.B, N.C, N.D, N.E, N.F, N.G];
 const dimmed = [...others, ...EDGES, mpLbl];
-beat(3, 14, (t) => {
+beat(3, 14.5, (t) => {
   A.to(aliceEnv, t, 0.8, {x: 3250, y: 470, s: 0.5}); A.fadeOut(aliceEnv, t + 0.5, 0.4);
   A.pulse(N.A, t + 0.8, 0.6, 1.2);
   A.cam(t + 0.8, 1.8, {cx: 3480, cy: 470, z: 2});
@@ -821,7 +821,7 @@ beat(3, 11, (t) => {
 
 const gossipLbl = Txt(3800, 96, 'mode 1 wrappers: many transactions, one recursive STARK', {size: 26, anchor: 'middle'});
 const hashNote = Txt(3800, 862, 'a transaction already broadcast is sent as its hash', {size: 20, fill: C.dim, anchor: 'middle'});
-beat(3, 12, (t) => {
+beat(3, 11, (t) => {
   A.fadeOut([mpLbl, every], t, 0.5); A.fadeIn(gossipLbl, t + 0.4, 0.8);
   [['A', 'B'], ['A', 'C'], ['A', 'D']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 1.2 + i * 0.2, 1.4, nodePi[b]));
   [['D', 'E'], ['D', 'F'], ['D', 'G'], ['B', 'E'], ['C', 'F']].forEach(([a, b], i) => travel(NP_[a], NP_[b], t + 3.4 + i * 0.2, 1.4, nodePi[b]));
