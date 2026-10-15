@@ -528,13 +528,13 @@ function MiniWrap(x, y) {
 
 /* ---------------- words (verbatim from the spec) ---------------- */
 const CAP = [
-  'Alice pays Bob privately with a post-quantum proof, using `PCS_open`. We follow her transfer from wallet to block, then see how Ethereum can later upgrade its part of the checking without changing any contract.',
+  'Alice pays Bob privately with a post-quantum proof, using `PCS_open`. A STARK splits into a cheap logic check and a heavy commitment check: the pool contract runs the cheap check, and Ethereum aggregates the heavy ones.',
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
   'Her wallet keeps the witness secret: her notes, her key and their Merkle paths. It must convince Ethereum of the public statement: the pool’s Merkle root, one nullifier per spent note, the new note commitments, the fee and a hash of this transaction.',
   'The pool’s rules are written as a circuit, a fixed list of simple arithmetic checks. Running it fills a table, the trace, with every value it computes. The wallet reads the whole table as one polynomial f, which also has a value at every other point.',
-  'A polynomial commitment scheme (PCS), WHIR today, seals f into a 32-byte root R, a fingerprint like a Merkle root. R binds f (up to a short list), and later the wallet can prove single values of f while hiding the rest.',
-  'A PIOP turns the circuit’s checks into one equation on f (with a committed quotient q). It holds at every point when the trace is right and fails at almost every point when it is wrong, so testing one random point is enough.',
-  'That point z is a hash of the statement and R (Fiat–Shamir), so Alice can’t pick a point where a wrong trace passes. The wallet sends R and the values the equation needs at z: the proof π, a few hundred bytes.',
+  'A polynomial commitment scheme (PCS), WHIR today, Reed–Solomon encodes f and seals it in a 32-byte Merkle root R. R binds f (up to a short list), and later the wallet can prove single values of f while hiding the rest.',
+  'A PIOP turns the circuit’s checks into one polynomial identity, C(f) = Z · q, with a quotient q committed alongside f. It holds everywhere for a valid trace and fails almost everywhere for a bad one, so testing one random point is enough.',
+  'That point z is a hash of the statement and R (Fiat–Shamir), so Alice can’t pick a point where a wrong trace passes. The wallet sends R and the values the identity needs at z: the proof π, a few hundred bytes.',
   'π doesn’t yet show the values really come from the polynomial behind R. That takes an opening proof per committed polynomial, about 150 KB each (an estimate). A STARK is these two parts, a PIOP and a PCS; here the pool checks the PIOP and Ethereum the openings.',
   'Her frame transaction (EIP-8141) has three frames: the first checks that her Merkle root is recent (EIP-8272), the pool’s `VERIFY` frame decides whether the transaction is valid and pays its fee, and the `SENDER` frame adds the new notes. EIP-8288’s dependency frame isn’t needed.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π sits where a signature would and authorizes this exact transaction.',
@@ -544,13 +544,13 @@ const CAP = [
   'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. A node checks the nonce keys, runs the first two frames to learn the claims, then checks each opening proof against its claim.',
   'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards that instead.',
   'A builder merges them into one final STARK in the block header, next to a hash of the block’s claims. Validators rederive the claims by running the transactions, check that the STARK proves exactly that list, and settle Alice’s transfer. The opening proofs themselves never go on chain.',
-  'So the STARK is split along its two parts. The PIOP is the pool’s own check, frozen in its contract. The PCS is Ethereum’s, most of the STARK’s work, merged into one proof per block while each claim pays its price. Both use one binary field. Ethereum’s part can be upgraded, and that is the last chapter.',
+  'So the STARK splits in two. The PIOP is the pool’s own check, frozen in its contract. The PCS is Ethereum’s: most of the STARK’s work, merged into one proof per block while each claim pays its price. Both use one binary field, and Ethereum’s part can be upgraded.',
   'Years later, a better PCS appears, say WHIR 2.0. `PCS_open` carries a version, which the contract reads from the proof, so a fork adds WHIR 2.0 as version 2. Wallets make fresh commitments in every proof, so they simply switch.',
   'The hard part is the circuit commitment in the pool’s code, made under version 1 and now written C₁. Each version Ethereum keeps is more code every node runs, so it wants to retire version 1. Then nobody could open C₁, and the pool would stop working.',
   'Justin Drake’s idea: while version 1 still works, anyone commits the same public tables under version 2, giving C₂, and both are opened at a random point r, a hash of C₁ and C₂. If the values match, C₂ holds the same polynomial: as with z, two different polynomials almost never agree at a random point.',
-  'A proposed system contract records that C₂ is equivalent to C₁. The pool still names C₁, and the wallet opens its claims through C₂. The pool’s code never changes, each circuit is recommitted once and shared by every contract that uses it, and version 1 can then be retired.',
+  'A proposed system contract records that C₂ is equivalent to C₁. The pool still names C₁, and the wallet opens its claims through C₂. The pool’s code never changes, each circuit is recommitted once and shared by every contract using it, and version 1 can be retired.',
   'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. Today’s roots can match a short list of polynomials, so each added one must fix exactly one. And the move happens before version 1 is broken, or unmoved pools freeze.',
-  'What stays fixed for good in the protocol is small: the binary field, `MUL_FIELD` and what a claim means, while each immutable dApp also freezes its own PIOP. The PCS, its opening proofs and how they are merged can all be upgraded by fork.',
+  'What stays fixed in the protocol is small: the binary field, `MUL_FIELD` and what a claim means, while each immutable dApp freezes its own PIOP. The PCS, its opening proofs and how they are merged can all be upgraded by fork.',
   'Recap. The witness never leaves the wallet. The small proof π goes on chain and the pool checks it. The opening proofs stay in the mempool until they are merged into the block’s one STARK, which proves the claims.',
   'Contracts check the PIOP. Ethereum checks the openings, and can upgrade how.',
 ];
@@ -728,7 +728,9 @@ beat(1, 16, (t) => {
 
 /* 4. Prove: commit with a PCS */
 const head3 = Txt(400, 172, 'PCS: WHIR today', {size: 34, anchor: 'middle'});
-const TL = [432, 386, 340, 294, 270];
+const cwBar = Card(156, 412, 488, 30, C.yellow, {fo: 0.08, r: 6, sw: 2});
+const cwLbl = CT(cwBar, 244, 21, 'Reed–Solomon codeword (rate 1/4)', {size: 18, fill: C.yellow, anchor: 'middle'});
+const TL = [392, 354, 316, 278, 256];
 const lvlX = [Array.from({length: 16}, (_, i) => 175 + 30 * i)];
 for (let k = 1; k <= 4; k++) lvlX.push(Array.from({length: lvlX[k - 1].length / 2}, (_, i) => (lvlX[k - 1][2 * i] + lvlX[k - 1][2 * i + 1]) / 2));
 const colFl = lvlX[0].map((x) => Flash(`M${x},698 L${x},${TL[0] + 9}`, C.yellow, {sw: 4, len: 0.35}));
@@ -738,11 +740,11 @@ const treeE = [0, 1, 2, 3].map((k) => {
   return m;
 });
 const treeN = [0, 1, 2, 3].map((k) => { const m = new M(0, 0, null, 0); lvlX[k].forEach((x) => shape(m, circ(x, TL[k], 5), {stroke: C.yellow, sw: 2, fill: C.stage, fo: 1, draw: false})); return m; });
-const Rchip = MChip(400, 247, '<m>R</m>', C.yellow, {w: 64, size: 30});
-const Rbytes = Txt(354, 255, '32 bytes', {size: 22, fill: C.dim, anchor: 'end'});
-const Rlock = Lock(464, 246, C.yellow, {k: 1.15});
-const aFix = Arrow(492, 236, 1498, 446, C.yellow, {bend: -96});
-const fm = qmid(492, 236, 1498, 446, -96);
+const Rchip = MChip(400, 234, '<m>R</m>', C.yellow, {w: 64, size: 30});
+const Rbytes = Txt(354, 242, '32 bytes', {size: 22, fill: C.dim, anchor: 'end'});
+const Rlock = Lock(464, 233, C.yellow, {k: 1.15});
+const aFix = Arrow(492, 224, 1498, 446, C.yellow, {bend: -96});
+const fm = qmid(492, 224, 1498, 446, -96);
 const lFix = Txt(fm[0], fm[1] - 18, 'binds <m>f</m> (up to a short list)', {size: 24, fill: C.yellow, anchor: 'middle'});
 /* Marked points sit between a 0-cell and a 1-cell, so the value of f there is visibly in between. */
 const edgeAfter = (k0) => { let k = k0; while (ALL[k] === ALL[k + 1]) k++; return k; };
@@ -751,10 +753,11 @@ const oneDot = Dot(OX, OY, C.yellow, {r: 8});
 const oneLn = Line(OX, 452, OX, OY - 11, C.yellow, {sw: 2});
 const oneLbl = Txt(OX, 440, 'one value of <m>f</m>', {size: 24, fill: C.yellow, anchor: 'middle'});
 const restLbl = Txt(1200, 784, 'the rest is hidden by a zero-knowledge opening', {size: 23, fill: C.dim, anchor: 'middle'});
-beat(1, 13.5, (t) => {
+beat(1, 14.5, (t) => {
   A.fadeOut([head2, rowHi], t, 0.6);
   A.write(head3, t + 0.3, 1.0);
   colFl.forEach((f, i) => A.flash(f, t + 1.0 + i * 0.05, 0.7));
+  A.draw(cwBar, t + 1.2, 0.6); A.fadeIn(cwLbl, t + 1.4, 0.4);
   A.fadeIn(treeN[0], t + 1.6, 0.4);
   [0, 1, 2, 3].forEach((k) => { A.draw(treeE[k], t + 2.0 + k * 0.45, 0.45); if (k < 3) A.fadeIn(treeN[k + 1], t + 2.35 + k * 0.45, 0.3); });
   A.fadeIn(Rchip, t + 3.8, 0.5, {s0: 0.4}); A.pulse(Rchip, t + 4.3, 0.7, 1.25);
@@ -767,13 +770,13 @@ beat(1, 13.5, (t) => {
 });
 
 /* 5. Prove: one equation, one random point */
-const eqT = Txt(2000, 150, 'the circuit’s checks  →  one equation on <m>f</m> (with quotient <m>q</m>)', {size: 28, anchor: 'middle', fill: C.green});
-const eqL = Txt(2000, 214, '<k=green>equation</k>(<m>f</m>, <m>x</m>) = 0   for every point <m>x</m>', {size: 34, anchor: 'middle'});
-const eqS = Txt(2000, 258, 'exactly when the trace is right', {size: 22, fill: C.dim, anchor: 'middle'});
+const eqT = Txt(2000, 150, 'the circuit’s checks  →  one polynomial identity', {size: 28, anchor: 'middle', fill: C.green});
+const eqL = Txt(2000, 214, '<k=green><m>C</m>(<m>f</m>)(<m>x</m>) − <m>Z</m>(<m>x</m>) · <m>q</m>(<m>x</m>)</k> = 0   for every point <m>x</m>', {size: 33, anchor: 'middle'});
+const eqS = Txt(2000, 258, 'exactly when the trace is right  (<m>q</m>: quotient polynomial, committed with <m>f</m>)', {size: 21, fill: C.dim, anchor: 'middle'});
 const EX0 = 1680, EX1 = 2340, EY0 = 500;
 const axE = Arrow(EX0 - 16, EY0, EX1 + 34, EY0, C.faint, {sw: 2.5, head: 11});
 const axEy = Arrow(EX0, EY0 + 112, EX0, EY0 - 152, C.faint, {sw: 2.5, head: 11});
-const axEyL = Txt(EX0 + 16, EY0 - 132, 'value of <k=green>equation</k>(<m>f</m>, <m>x</m>)', {size: 20, fill: C.dim});
+const axEyL = Txt(EX0 + 16, EY0 - 132, 'value of <k=green><m>C</m>(<m>f</m>)(<m>x</m>) − <m>Z</m>(<m>x</m>) · <m>q</m>(<m>x</m>)</k>', {size: 20, fill: C.dim});
 const axExL = Txt(EX1 + 34, EY0 + 34, '<m>x</m>', {size: 24, fill: C.dim, anchor: 'middle'});
 const okLine = Line(EX0 + 4, EY0, EX1, EY0, C.green, {sw: 5});
 const wF = (x) => EY0 - 76 * Math.sin((x - EX0) / 75 + 1.2) - 24 * Math.sin((x - EX0) / 29 + 0.2);
@@ -789,9 +792,9 @@ let XR = 2150; for (let x = 2080; x < 2260; x++) if (Math.abs(wF(x) - EY0) > Mat
 const rLn = Line(XR, EY0, XR, wF(XR) + (wF(XR) < EY0 ? 8 : -8), C.yellow, {sw: 3});
 const rDot = Dot(XR, wF(XR), C.yellow, {r: 8});
 const oneEnough = Txt(2010, 710, 'so one random point is enough', {size: 26, fill: C.yellow, anchor: 'middle'});
-beat(1, 13.5, (t) => {
+beat(1, 15.5, (t) => {
   A.cam(t, 2.2, {cx: 1600, cy: 450});
-  A.fadeOut([oneDot, oneLn, oneLbl, restLbl, aFix, lFix, Rbytes, Rlock, head3], t, 0.5);
+  A.fadeOut([oneDot, oneLn, oneLbl, restLbl, aFix, lFix, Rbytes, Rlock, head3, cwBar], t, 0.5);
   A.to([fCurve, ...fDots, ...digits], t + 0.4, 0.8, {o: 1});
   A.write(eqT, t + 1.4, 1.0); A.write(eqL, t + 2.2, 1.2); A.fadeIn(eqS, t + 3.2, 0.5);
   A.draw([axE, axEy], t + 4.2, 0.6); A.fadeIn([axEyL, axExL], t + 4.6, 0.5);
@@ -819,7 +822,7 @@ const zDot = Dot(ZX, ZY, C.yellow, {r: 8});
 const vLn = Line(ZX, 428, ZX, ZY - 12, C.yellow, {sw: 1.5, dash: '4 6'});
 const vChip = MChip(ZX, 410, '<m>f</m>(<m>z</m>) = <m>v</m>', C.yellow, {w: 168, size: 26});
 const zFly = Token(2110, 363, '<m>z</m>', C.yellow, {r: 34});
-const eqZ = Txt(1990, 500, '<k=green>equation</k>(<m>f</m>, <m>z</m>) = 0', {size: 34, anchor: 'middle'});
+const eqZ = Txt(1990, 500, '<k=green><m>C</m>(<m>f</m>)(<m>z</m>) = <m>Z</m>(<m>z</m>) · <m>q</m>(<m>z</m>)</k>', {size: 33, anchor: 'middle'});
 const eqZok = Check(2190, 488, C.green, {k: 1.3});
 const piC = Card(1870, 552, 270, 176, C.yellow);
 const piT = CT(piC, 22, 44, 'proof <m>π</m>', {size: 28, fill: C.yellow});
@@ -855,6 +858,9 @@ const pileTop = Txt(3700, 112, 'opening proof', {size: 32, anchor: 'middle', fil
 const pileKB = Txt(3690, 718, '≈ 150 KB each (est.)', {size: 36, anchor: 'middle', fill: C.purple});
 const pileN1 = Txt(3690, 770, 'checked by Ethereum’s nodes', {size: 24, anchor: 'middle'});
 const pileN2 = Txt(3690, 810, 'too big for a transaction', {size: 24, anchor: 'middle', fill: C.dim});
+const stSplit = Card(2980, 690, 620, 128, C.grey, {fo: 0.06, sw: 2});
+const stSplitT = CT(stSplit, 310, 44, 'STARK  =  <k=teal>PIOP</k>  +  <k=purple>PCS openings</k>', {size: 26, anchor: 'middle'});
+const stSplitS = CT(stSplit, 310, 92, 'pool contract checks <k=teal>PIOP</k>  ·  Ethereum aggregates <k=purple>openings</k>', {size: 20, fill: C.dim, anchor: 'middle'});
 beat(1, 16, (t) => {
   A.fadeOut([eqL, eqZ, eqZok, stChip, Rghost, aSt, aRh, hashB, aZ, zTok, zFly, zLine, zDot, piSz], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 3200, cy: 450});
@@ -863,6 +869,7 @@ beat(1, 16, (t) => {
   A.fadeIn(pile, t + 4.4, 0.01); A.fadeIn(pile.pages, t + 4.4, 0.2, {lag: 0.07, dy: 14});
   A.fadeIn(pileTop, t + 5.6, 0.5); A.fadeIn(pileKB, t + 6.1, 0.6);
   A.fadeIn(pileN1, t + 7.8, 0.6); A.fadeIn(pileN2, t + 9.0, 0.6);
+  A.draw(stSplit, t + 10.6, 0.8); A.fadeIn([stSplitT, stSplitS], t + 11.1, 0.5, {lag: 0.2});
 });
 
 /* 8. Transaction: the frame transaction, with no dependency frame */
@@ -897,8 +904,9 @@ rich(ghost.inner, -GH.w / 2 + 22, -7, 'dependency frame', {size: 22, fill: C.blu
 rich(ghost.inner, -GH.w / 2 + 22, 26, 'verify a whole STARK (EIP-8288)', {size: 20, fill: C.ink});
 const ghostLead = Line(TX.x + TX.w + 8, GY, GH.x - 8, GY, C.faint, {sw: 2, dash: '6 6'});
 const ghostStrike = Curve(`M${GH.x - 14},${GY + 3} L${GH.x + GH.w + 14},${GY + 3}`, C.red, {sw: 4});
+const ghostSub = Txt(GH.x + GH.w / 2, GY + 76, 'replaced by <c>PCS_open</c> claims from frame 1', {size: 20, fill: C.blueL, anchor: 'middle'});
 beat(2, 16, (t) => {
-  A.fadeOut([q1, q2, pileTop, pileKB, pileN1, pileN2, pile], t, 0.6);
+  A.fadeOut([q1, q2, pileTop, pileKB, pileN1, pileN2, pile, stSplit], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 4930, cy: 450});
   A.fadeOut(piC, t + 0.4, 0.5); A.fadeIn(piTok, t + 0.3, 0.3, {s0: 0.6});
   A.to(piTok, t + 0.5, 2.4, {x: fPi.get('x', 0), y: fPi.get('y', 0)}); A.handoff(piTok, fPi, t + 2.9, 0.1);
@@ -913,12 +921,13 @@ beat(2, 16, (t) => {
   });
   A.fadeIn(fRtag, t + 4.8, 0.5);
   A.fadeIn(ghostLead, t + 11.6, 0.5); A.fadeIn(ghost, t + 11.8, 0.7, {dx: 16});
-  A.draw(ghostStrike, t + 14.0, 0.6); A.to(ghost, t + 14.4, 0.5, {o: 0.6});
+  A.draw(ghostStrike, t + 13.8, 0.6); A.to(ghost, t + 14.2, 0.5, {o: 0.6});
+  A.fadeIn(ghostSub, t + 14.3, 0.5, {dy: 8});
 });
 
 /* 9. Transaction: the pool is the sender, the nullifiers are nonce keys, π sits where a signature would */
 beat(2, 15.5, (t) => {
-  A.fadeOut([ghost, ghostLead, ghostStrike], t, 0.6);
+  A.fadeOut([ghost, ghostLead, ghostStrike, ghostSub], t, 0.6);
   A.cam(t + 0.2, 1.8, {cx: 4660, cy: 450});
   circum(...W(14, 98), 692, 36, C.teal, t + 0.4, {hold: 1.8}); A.fadeIn(hSenderV, t + 0.8, 0.5);
   circum(...W(14, 144), 692, 36, C.blue, t + 4.0, {hold: 2.4}); A.fadeIn(hNonceV, t + 4.4, 0.5); A.fadeIn(hNonceTag, t + 5.0, 0.5);
@@ -983,8 +992,9 @@ const clmS = CT(clm, 456, 48, 'recorded, not checked', {size: 20, fill: C.dim, a
 const CL = [['<m>R</m> at <m>z</m> = <m>v</m>', PL.y + CY[2] - 8 - CLY], ['<m>C</m> at <m>z</m> = <m>c</m>', PL.y + CY[3] - 8 - CLY + 8]];
 const cl = CL.map(([s, ly]) => MC(clm, 240, ly, s, C.blueL, {w: 250, size: 28}));
 const cf = CL.map(([s], i) => MChip(PW(560, 0)[0], PW(0, CY[2 + i] - 8)[1], s, C.blueL, {w: 250, size: 28}));
-const big1 = Txt(6960, 384, '<c>PCS_open</c> records a claim.', {size: 30, anchor: 'middle'});
-const big2 = Txt(6960, 434, 'It does not check it.', {size: 30, anchor: 'middle'});
+const big1 = Txt(6960, 364, '<c>PCS_open</c> records a claim.', {size: 30, anchor: 'middle'});
+const big2 = Txt(6960, 412, 'It does not check it.', {size: 30, anchor: 'middle'});
+const big3 = Txt(6960, 464, 'a block with a false claim is invalid', {size: 22, fill: C.green, anchor: 'middle'});
 beat(2, 19.5, (t) => {
   A.cam(t + 0.2, 2.0, {cx: 6540, cy: 450});
   circumC(...PW(300, 148), 54, 40, C.green, t + 0.6, {hold: 2.4}); A.pulse(pC, t + 1.0, 0.7, 1.25);
@@ -1000,7 +1010,7 @@ beat(2, 19.5, (t) => {
   });
   A.to(hiBar, t + 14.2, 0.5, {y: hiY(4)}); A.fadeIn(pApp, t + 14.4, 0.5); A.draw(appOk, t + 15.0, 0.4);
   A.fadeOut(hiBar, t + 15.8, 0.5);
-  A.write(big1, t + 16.0, 1.2); A.write(big2, t + 17.2, 1.0);
+  A.write(big1, t + 15.8, 1.1); A.write(big2, t + 16.9, 0.9); A.fadeIn(big3, t + 17.8, 0.6, {dy: 8});
 });
 
 /* 11b. Transaction: the claim is the only link between the pool's check and the opening proofs */
@@ -1021,7 +1031,7 @@ const lkBadX = Cross(LW.x + 420, 330, C.red, {k: 1.1});
 const lkBadL = Txt(LW.x + 30, 392, 'a proof for any other root, point or value fails', {size: 22, fill: C.dim});
 const LINK = [lwal, lwalT, lwalS, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL];
 beat(2, 15, (t) => {
-  A.fadeOut([big1, big2, pool], t, 0.5);
+  A.fadeOut([big1, big2, big3, pool], t, 0.5);
   A.cam(t + 0.2, 2.0, {cx: 7450, cy: 450});
   A.draw(lwal, t + 1.2, 0.9); A.fadeIn(lwalT, t + 1.6, 0.5); A.fadeIn(lwalS, t + 2.2, 0.6, {dx: -10});
   A.fadeIn(lkPer, t + 3.4, 0.5);
@@ -1229,7 +1239,7 @@ const lay = [[C.teal, 'PIOP', 'the pool’s own verifier, frozen in its contract
 const upTag = CChip(lay[1], 1090, 75, 'upgradable', C.purple, {size: 20});
 const layArrow = Arrow(12480, 1296, 12480, 1344, C.blueL, {sw: 3});
 const layArrowL = Txt(12500, 1328, 'claims', {size: 22, fill: C.blueL});
-beat(5, 16.5, (t) => {
+beat(5, 17.5, (t) => {
   A.fadeOut([blk, hdr, bdy, bcl, aHash, aHashL, vals, valsL, vChk, vChkM, pst], t, 0.6);
   A.cam(t, 2.4, {cx: 12000, cy: 1425});
   lay.forEach((m, i) => { const tt = t + 1.8 + [0, 3.4, 7.6][i]; A.draw(m, tt, 0.9); A.write(m.a, tt + 0.4, 0.7); A.fadeIn(m.b, tt + 0.9, 0.6, {dx: -10}); if (m.c) A.fadeIn(m.c, tt + 1.6, 0.6, {dx: -10}); });
@@ -1318,7 +1328,7 @@ const rTok = Token(13550, 738, '<m>r</m>', C.yellow, {r: 30});
 const rBurst = Burst(13550, 738, C.yellow, {r1: 40, r2: 58});
 const o1 = MChip(13110, 776, '<m>C</m><sub>1</sub> at <m>r</m> = <m>y</m><sub>1</sub>', C.green, {w: 230, size: 26});
 const o2 = MChip(13990, 776, '<m>C</m><sub>2</sub> at <m>r</m> = <m>y</m><sub>2</sub>', C.gold, {w: 230, size: 26});
-const yEq = MChip(13550, 776, '<m>y</m><sub>1</sub> = <m>y</m><sub>2</sub>', C.green, {w: 160, size: 26});
+const yEq = MChip(13550, 818, '<m>y</m><sub>1</sub> = <m>y</m><sub>2</sub>  ✓', C.green, {w: 176, size: 25});
 const aO1 = Arrow(13514, 748, 13232, 772, C.yellow, {sw: 2.5}), aO2 = Arrow(13586, 748, 13868, 772, C.yellow, {sw: 2.5});
 const o1L = Txt(13110, 834, 'opened under version 1', {size: 20, fill: C.dim, anchor: 'middle'});
 const o2L = Txt(13990, 834, 'opened under version 2', {size: 20, fill: C.dim, anchor: 'middle'});
@@ -1393,7 +1403,7 @@ const eArr = CT(sys, 164, 178, '→', {size: 34});
 const eB1 = CT(sys, 222, 182, '{', {size: 42});
 const eC2 = MC(sys, 284, 168, '<m>C</m><sub>2</sub>', C.gold, {w: 76, size: 30});
 const eB2 = CT(sys, 334, 182, '}', {size: 42});
-const eNote = CT(sys, 26, 262, 'added by anyone, with the random-point check', {size: 21, fill: C.dim});
+const eNote = CT(sys, 26, 262, 'added once, shared by every contract using this circuit', {size: 20, fill: C.dim});
 const ENTRY = [15360 + 210, 170 + 168];
 const verBox = (x, a, b) => { const m = Card(x, 590, 420, 190, C.purple, {fo: 0.06}); m.a = CT(m, 210, 50, a, {size: 28, fill: C.purple, anchor: 'middle'}); m.b = CT(m, 210, 86, b, {size: 21, fill: C.dim, anchor: 'middle'}); return m; };
 const v1x = verBox(14725, 'version 1', 'WHIR');
@@ -1424,7 +1434,7 @@ beat(5, 16, (t) => {
 /* 23. Upgrade: three rules */
 const RU = [[IconPlus, C.green, '1.  Add, never replace', 'so nobody can lock others out with a commitment only they can open'],
   [IconPin, C.gold, '2.  One added commitment, one polynomial', 'so none can pass as the real circuit and later open as a fake'],
-  [IconShield, C.blueL, '3.  Move before version 1 is broken', 'because the check trusts version 1’s openings']];
+  [IconShield, C.blueL, '3.  Move before version 1 is broken', 'because the check trusts version 1’s openings (unmoved pools freeze)']];
 const rules = RU.map(([Ic, col, a, b], i) => {
   const y = 1120 + 210 * i;
   const m = Card(14800, y, 1200, 170, C.ink, {fo: 0.03, sw: 2});
@@ -1440,7 +1450,7 @@ beat(5, 16.5, (t) => {
 
 /* 24. Upgrade: what stays fixed, what can change */
 const colCard = (x, col, title) => { const m = Card(x, 190, 620, 350, col, {fo: 0.04}); m.t = CT(m, 32, 64, title, {size: 34, fill: col}); m.div = CLine(m, 20, 92, 600, 92, C.rule); return m; };
-const fx = colCard(16440, C.ink, 'fixed for good');
+const fx = colCard(16440, C.ink, 'fixed for good (protocol)');
 const fxIcon = Lock(...at(fx, 570, 52), C.ink, {parent: fx, k: 1});
 const up = colCard(17140, C.purple, 'upgradable by fork');
 const upIcon = IconFork(...at(up, 570, 54), C.purple, 0.9); up.inner.appendChild(upIcon.g);
@@ -1449,8 +1459,8 @@ const item = (card, ly, s, col, size = 27) => [Dot(...at(card, 46, ly - 8), col,
 const fxItems = [[...item(fx, IY[0], 'the binary field:', C.ink), CT(fx, 70, IY[0] + 34, '64-bit data, 192-bit points and values', {size: 24})],
   item(fx, IY[1], '<c>MUL_FIELD</c>', C.ink), item(fx, IY[2], 'what a claim means', C.ink)];
 const upItems = [item(up, IU[0], 'the PCS and its commitments', C.purple), item(up, IU[1], 'opening proofs', C.purple), item(up, IU[2], 'how they are merged', C.purple)];
-const appN = MChip(17100, 640, 'each immutable dApp freezes its own PIOP', C.teal, {w: 620, size: 28, h: 52});
-beat(5, 14.5, (t) => {
+const appN = MChip(17100, 640, 'frozen per dApp: its circuit, PIOP and transcript', C.teal, {w: 690, size: 27, h: 52});
+beat(5, 15.5, (t) => {
   A.fadeOut([pool3, sys, v1x, v2x, clc2, aRoute, clcOk, noChange, stamp2, rules, rules.map((m) => m.icon)], t, 0.6);
   A.cam(t, 2.4, {cx: 17100, cy: 430});
   A.draw(fx, t + 1.6, 0.9); A.write(fx.t, t + 2.0, 0.7); A.fadeIn(fxIcon, t + 2.4, 0.5); A.draw(fx.div, t + 2.3, 0.5);
@@ -1481,7 +1491,7 @@ const r3 = {
   end: Badge(RX[3], RY[3]),
 };
 const roleLbl = Txt(RL, 690, 'role', {size: 22, fill: C.dim});
-const roleCols = [['proves'], ['checks the PIOP,', 'records claims'], ['checks openings,', 'merges them'], ['verifies one STARK']]
+const roleCols = [['proves'], ['checks the PIOP,', 'records claims'], ['checks openings,', 'merges them'], ['rederives claims,', 'verifies one STARK']]
   .map((ls, i) => ls.map((s, j) => Txt(RX[i], 690 + 28 * j, s, {size: 20, anchor: 'middle'})));
 beat(6, 16, (t) => {
   A.fadeIn(curtain, t, 0.7);
