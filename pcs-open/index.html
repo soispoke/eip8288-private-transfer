@@ -530,7 +530,8 @@ function MiniWrap(x, y) {
 const CAP = [
   'Alice pays Bob privately with a post-quantum proof, using `PCS_open`. A STARK splits into a cheap logic check and a heavy commitment check. Nodes run the cheap one as the pool’s code in their EVM, and check the heavy ones natively, merging them recursively.',
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
-  'Her wallet keeps the witness secret: her notes, her key and their Merkle paths. It must convince the pool and validators of the public statement: the pool’s Merkle root, one nullifier per spent note, the new note commitments, the fee and a hash of this transaction.',
+  'Her wallet holds secrets that never leave it, called the witness: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. Everyone else sees only the public statement, which hides every amount except the fee.',
+  'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
   'The pool’s rules are written as a circuit, a fixed list of simple arithmetic checks. Running it fills a table, the trace, with every value it computes. The wallet reads the whole table as one polynomial f, which also has a value at every other point.',
   'A polynomial commitment scheme (PCS), WHIR today, Reed–Solomon encodes f and seals it in a 32-byte Merkle root R. R binds f, up to a short list a cheater could pick from (a few bits of security), and later the wallet can prove single values of f while hiding the rest.',
   'A PIOP turns the circuit’s checks into one polynomial identity, C(f) = Z · q, with a quotient q committed alongside f. It holds everywhere for a valid trace and fails almost everywhere for a bad one, so testing one random point is enough.',
@@ -559,16 +560,17 @@ const NOTE = [
   'Based on Emile’s `PCS_open` proposal as written up by Tom Wambsgans in the PCS-openings-aggregation README (github.com/TomWambsgans, commit a962947b42), with Justin Drake’s version parameter and the vault’s equivalents-registry refinement, adapted to the minimal shielded pool and compared with the EIP-8288 program-scheme version of the same transfer. Here claims are rederived from `VERIFY` execution rather than carried as headers, and fixed commitments live in contract code. Sizes and prices are model estimates, not measurements. The design is a recommendation under discussion, not a specification.',
   'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative.',
   'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The signature hash covers the transaction except its signature bytes, where π travels, so the proof can bind to it. Hashes are Keccak-256.',
-  'The circuit encodes the relation: the rules every valid pair of statement and witness must satisfy. f takes every value in the table, read here row by row: 128 cells give the values of f at 128 points. The no-round PIOPs assumed in steps 5 to 7 use one-variable polynomials like the one plotted. `PCS_open` commits multilinear polynomials, so the wallet commits such a polynomial through its coefficients, and its value at z is the multilinear value at (z, z², z⁴, …). A real trace has millions of cells. The trace is a table over K = GF(2⁶⁴), the binary field leanVM uses for data. In a sumcheck-style PIOP (Flock) a Keccak trace is bits packed 64 to a word; in a univariate PIOP committed through its coefficients, each bit occupies a full field element.',
+  'In proof-system terms the statement is the public input, the witness the private input, and the pool’s rules the relation between them. A nullifier is a hash of the note and her key: the same note always gives the same nullifier, so a second spend is caught, yet no one else can tell which note it belongs to. Zero knowledge means the proof reveals nothing about the witness beyond the fact that a valid one exists.',
+  'The circuit encodes the relation: the rules every valid pair of statement and witness must satisfy. f takes every value in the table, read here row by row: 128 cells give the values of f at 128 points. The no-round PIOPs assumed in steps 7 to 9 use one-variable polynomials like the one plotted. `PCS_open` commits multilinear polynomials, so the wallet commits such a polynomial through its coefficients, and its value at z is the multilinear value at (z, z², z⁴, …). A real trace has millions of cells. The trace is a table over K = GF(2⁶⁴), the binary field leanVM uses for data. In a sumcheck-style PIOP (Flock) a Keccak trace is bits packed 64 to a word; in a univariate PIOP committed through its coefficients, each bit occupies a full field element.',
   'WHIR encodes the table with a Reed–Solomon code at rate 1/4 and commits to the codeword with a Merkle tree. Strictly, a version 1 root takes no out-of-domain sample at its first level, so it fixes f only up to a short list of at most 2¹² polynomials; because z is drawn after R, this costs at most 12 bits of soundness, which applications budget for. The list exists because the opening checks that the committed word is close to a codeword, not equal to one, and at rate 1/4 in the Johnson regime one word can be close to several; an honest wallet’s root holds exactly one codeword. An out-of-domain answer fixed at commit time would pin down a single polynomial. Openings travel in public, so they must hide the data: leanVM’s zero-knowledge branch has a hiding WHIR, but its opening is zero knowledge only inside leanVM’s own outer proof, and a standalone one is still to be built (roughly 1× the size for word claims with an in-commitment mask, or about 2× for bit claims on the keyed route).',
   'The rules themselves hold only on the table’s rows. In a quotient-based PIOP the equation reads C(f) = Z · q, where Z vanishes on the rows and q is a helper polynomial committed together with f, and this identity holds at every point. A wrong trace makes the two sides different polynomials, which agree at only a few points (the Schwartz–Zippel lemma).',
   'Fiat–Shamir: the pool’s own transcript, with Keccak, derives z from the statement and every proof byte read before it. Points and values live in E = GF(2¹⁹²), a degree-3 extension of K. One claim may cover several points, for example z and the next row. Claimed values are public, so the PIOP must also blind f so that they reveal nothing about the witness (with data in K and points in E, each opened E value needs three K coefficients of randomness).',
-  'What an opening proof contains, for leanVM’s hiding WHIR at 2²⁰ data words and rate 1/4: the first level opens 112 random spots of the codeword under R, each a leaf of 64 words with a Merkle path of 16 hashes. Folding (by 2⁶, then 2⁴) gives three smaller codewords, each committed with its own Merkle root and opened at 45, 28 and 20 spots (paths of 15, 14 and 13), while sumcheck messages carry the claim f(z) = v through each fold, and the last polynomial is sent in full. Counting each leaf and each distinct path node once gives about 150 KB, against 8 MB for the committed trace at this size (2²⁰ words of 8 bytes) and four times that for its codeword. If v is wrong, the committed codeword is far from that of every polynomial with value v at z, because codewords of different polynomials differ in most spots, so each spot catches the lie with probability about one half (about one bit of security per query at rate 1/4, in the Johnson regime). The trace, f and the codeword stay with the wallet; the opened spots are masked so that they reveal nothing about the witness, though a standalone zero-knowledge opening is still to be built (see the note to step 5).',
+  'What an opening proof contains, for leanVM’s hiding WHIR at 2²⁰ data words and rate 1/4: the first level opens 112 random spots of the codeword under R, each a leaf of 64 words with a Merkle path of 16 hashes. Folding (by 2⁶, then 2⁴) gives three smaller codewords, each committed with its own Merkle root and opened at 45, 28 and 20 spots (paths of 15, 14 and 13), while sumcheck messages carry the claim f(z) = v through each fold, and the last polynomial is sent in full. Counting each leaf and each distinct path node once gives about 150 KB, against 8 MB for the committed trace at this size (2²⁰ words of 8 bytes) and four times that for its codeword. If v is wrong, the committed codeword is far from that of every polynomial with value v at z, because codewords of different polynomials differ in most spots, so each spot catches the lie with probability about one half (about one bit of security per query at rate 1/4, in the Johnson regime). The trace, f and the codeword stay with the wallet; the opened spots are masked so that they reveal nothing about the witness, though a standalone zero-knowledge opening is still to be built (see the note to step 6).',
   'Model estimates for a Keccak withdrawal over GF(2¹⁹²) in the vault’s harness: about 408 bytes of proof with 5 claims (3 fresh, 2 fixed) for a univariate PLONK design, or about 2,392 bytes with 3 claims (2 fresh, 1 fixed; 1 fresh if the mask is stacked) for a Flock sumcheck design; a narrow algebraic-hash trace models at 176 to 248 bytes. Two claims (R and C) are drawn here to keep the diagram simple. The opening proof estimate is for leanVM’s hiding WHIR at its smallest size, 2²⁰ data words: about 130 to 155 KB each before standalone zero knowledge (about 300 KB for a keyed bit-claim opening).',
   'Frame 0 is EIP-8272’s recent root verifier frame. In the vault’s EIP-8288 program-scheme version of this transfer, a dependency frame (mode 3 in that draft; mode 4 in current upstream EIP-8288) required a proof for (data_hash, program_id) and came after the pool’s `VERIFY` frame. Under `PCS_open` there is no dependency frame: the claims come from the pool’s `VERIFY` frame itself. Estimates: EIP-8288 prices a dependency frame at 30,000 gas (plus a 30,000 `recursive_stark_gas` header share in upstream). Here the pool pays for its PIOP check (about 11,000 to 69,000 gas across the vault’s GF(2¹⁹²) models, or 12,000 to 15,000 for a narrow algebraic-hash withdrawal) plus about 20,000 gas per claim (about 108,000 to 128,000 gas total in the Keccak harness at drafted prices, or 69,000 to 89,000 if fixed claims are free), and the transaction carries a few hundred bytes of proof instead of a 96-byte dependency entry. In return each dApp keeps its own circuit and PIOP, and Ethereum fixes only the commitment layer.',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
   'The pool’s `VERIFY` code runs in the EVM of every node that handles the transaction: mempool nodes when they admit it, the builder, and every validator when it executes the block. As in the EIP-8288 version, the code checks the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the `SENDER` frame’s gas limits. `MUL_FIELD` multiplies two elements of E, 24 bytes each. Whether it is an opcode or a precompile is open; an opcode is assumed here.',
-  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 19), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values; the whiteboard and design page write `pOpen(v, C, x, y, π)` with `v` the version and `π` the off-chain opening proof. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
+  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 20), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values; the whiteboard and design page write `pOpen(v, C, x, y, π)` with `v` the version and `π` the off-chain opening proof. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
   'Each opening proof’s Fiat–Shamir transcript starts from the whole claim (root, size, kind, points, values), so it proves that claim and no other (up to the short list a version 1 root binds to). The claims are fully determined by the transaction and the pool’s code, which is why the wallet can prove them before sending and every node derives the same ones. The two transcripts, the pool’s with Keccak and the opening’s, are separate; a proof that they compose safely is still open.',
   'Nodes must run validation before they can check opening proofs, since the claims come from it; EIP-8288 nodes can check a proof without running any frame. An opening proof that fails condemns only itself and the peer that sent it, not the transaction.',
   '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node folds every second or specialized aggregators do is an open networking question in the vault). The recursive STARK proves that every collected opening proof verifies against its claim.',
@@ -629,19 +631,23 @@ beat(1, 13, (t) => {
 });
 
 /* 2. Prove: witness and statement */
-const wit = Card(110, 160, 450, 340, C.red);
+const wit = Card(110, 160, 450, 400, C.red);
 const witT = CT(wit, 24, 50, 'witness', {size: 32, fill: C.red});
 const witTag = CT(wit, 426, 48, 'private', {size: 21, fill: C.dim, anchor: 'end'});
 const witLock = Lock(...at(wit, 336, 40), C.red, {parent: wit, k: 0.9});
-const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>'], ['Merkle paths', 'to the root'], ['new notes', '1.2 ETH for Bob'], ['', '0.19 ETH change']]
-  .map(([a, b], i) => Row(wit, 116 + 46 * i, a, b, 200, {size: 23, lx: 24}));
-const stm = Card(1040, 160, 450, 340, C.blue);
+const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>'], ['Merkle paths', 'into the pool’s tree'], ['new notes', '1.2 ETH for Bob'], ['', '0.19 ETH change']]
+  .map(([a, b], i) => Row(wit, 116 + 56 * i, a, b, 200, {size: 23, lx: 24}));
+const stm = Card(1040, 160, 450, 400, C.blue);
 const stmT = CT(stm, 24, 50, 'statement', {size: 32, fill: C.blue});
 const stmTag = CT(stm, 426, 48, 'public', {size: 21, fill: C.dim, anchor: 'end'});
-const stmRows = [['Merkle root', 'root'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>'], ['fee', '0.01 ETH'], ['binding', 'signature hash']]
-  .map(([a, b], i) => Row(stm, 116 + 46 * i, a, b, 200, {size: 23, lx: 24}));
+const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'so the proof works for this one only']];
+const stmRows = STM.map(([a, b, g], i) => [Row(stm, 106 + 56 * i, a, b, 200, {size: 23, lx: 24}), CT(stm, 24, 130 + 56 * i, g, {size: 17, fill: C.dim})]);
+/* What the proof establishes, between the private and the public side. */
+const shows = Txt(800, 214, 'the proof shows', {size: 26, anchor: 'middle'});
+const SHOW = ['her notes are in the pool’s tree', 'she holds their key', 'each nullifier comes from its note', 'the new notes are sealed correctly', '0.9 + 0.5 = 1.2 + 0.19 + 0.01', 'it is made for this transaction'];
+const showRows = SHOW.map((s, i) => [Check(612, 262 + 44 * i, C.green, {k: 0.7}), Txt(632, 270 + 44 * i, s, {size: 21})]);
 const eth = Card(640, 700, 320, 76, C.grey, {fo: 0.06});
-const ethT = CT(eth, 160, 48, 'pool & validators', {size: 26, anchor: 'middle'});
+const ethT = CT(eth, 160, 48, 'nodes that check it', {size: 26, anchor: 'middle'});
 /* Point where a bent Arrow crosses height y (searched along the quadratic curve). */
 const qAtY = (x1, y1, x2, y2, bend, y) => {
   const L = Math.hypot(x2 - x1, y2 - y1), cx = (x1 + x2) / 2 - (y2 - y1) / L * bend, cy = (y1 + y2) / 2 + (x2 - x1) / L * bend;
@@ -649,25 +655,31 @@ const qAtY = (x1, y1, x2, y2, bend, y) => {
   for (let i = 0; i <= 400; i++) { const s = i / 400, u = 1 - s, px = u * u * x1 + 2 * u * s * cx + s * s * x2, py = u * u * y1 + 2 * u * s * cy + s * s * y2; if (Math.abs(py - y) < Math.abs(best[1] - y)) best = [px, py]; }
   return best;
 };
-const aConv = Arrow(1220, 508, 928, 732, C.blue, {bend: -40});
-const cvm = qAtY(1220, 508, 928, 732, -40, DEVB);
+const aConv = Arrow(1220, 568, 928, 732, C.blue, {bend: -40});
+const cvm = qAtY(1220, 568, 928, 732, -40, DEVB);
 const lConv = Txt(cvm[0] + 30, cvm[1] + 40, 'convince', {size: 22, fill: C.blue});
-const aHide = Arrow(380, 508, 672, 732, C.red, {bend: 40});
-const hm = qAtY(380, 508, 672, 732, 40, DEVB);
+const aHide = Arrow(380, 568, 672, 732, C.red, {bend: 40});
+const hm = qAtY(380, 568, 672, 732, 40, DEVB);
 const xHide = Cross(hm[0], hm[1], C.red, {k: 1.2});
 const lHide = Txt(hm[0] - 28, hm[1] + 40, 'not revealed', {size: 22, fill: C.dim, anchor: 'end'});
-beat(1, 15, (t) => {
+beat(1, 17.5, (t) => {
   A.to(intent, t, 1.0, {x: 800, y: 112, s: 0.8});
   A.fadeOut([intent2, notesLbl], t, 0.5);
   A.draw(wit, t + 0.3, 1.1); A.write(witT, t + 0.8, 0.7); A.fadeIn(witTag, t + 1.1, 0.5);
   A.to([n1, n2], t + 0.9, 1.0, {x: 392, y: 268, s: 0.35}); A.fadeOut([n1, n2], t + 1.6, 0.4);
-  A.fadeIn(witRows, t + 1.8, 0.5, {lag: 0.35, dx: -12});
-  A.fadeIn(witLock, t + 4.0, 0.5); A.pulse(witLock, t + 4.5, 0.8, 1.35);
-  A.draw(stm, t + 5.6, 1.1); A.write(stmT, t + 6.1, 0.7); A.fadeIn(stmTag, t + 6.4, 0.5);
-  A.fadeIn(stmRows, t + 6.8, 0.5, {lag: 0.5, dx: -12});
-  A.draw(eth, t + 9.8, 0.9); A.fadeIn(ethT, t + 10.2, 0.5);
-  A.draw(aConv, t + 10.6, 0.9); A.fadeIn(lConv, t + 11.2, 0.5);
-  A.draw(aHide, t + 12.2, 0.9); A.draw(xHide, t + 13.0, 0.4); A.to(aHide, t + 13.2, 0.5, {o: 0.35}); A.fadeIn(lHide, t + 13.3, 0.5);
+  A.fadeIn(witRows, t + 1.8, 0.5, {lag: 0.4, dx: -12});
+  A.fadeIn(witLock, t + 4.2, 0.5); A.pulse(witLock, t + 4.7, 0.8, 1.35);
+  A.draw(stm, t + 6.4, 1.1); A.write(stmT, t + 6.9, 0.7); A.fadeIn(stmTag, t + 7.2, 0.5);
+  stmRows.forEach(([r, g], i) => { A.fadeIn(r, t + 7.8 + i * 1.3, 0.5, {dx: -12}); A.fadeIn(g, t + 8.2 + i * 1.3, 0.5); });
+});
+
+/* 2b. Prove: what the proof must show, and to whom */
+beat(1, 17.5, (t) => {
+  A.write(shows, t + 0.4, 0.8);
+  showRows.forEach(([c, s], i) => { A.draw(c, t + 1.4 + i * 1.1, 0.35); A.fadeIn(s, t + 1.5 + i * 1.1, 0.5, {dx: -8}); });
+  A.draw(eth, t + 8.6, 0.9); A.fadeIn(ethT, t + 9.0, 0.5);
+  A.draw(aConv, t + 9.4, 0.9); A.fadeIn(lConv, t + 10.0, 0.5);
+  A.draw(aHide, t + 11.0, 0.9); A.draw(xHide, t + 11.8, 0.4); A.to(aHide, t + 12.0, 0.5, {o: 0.35}); A.fadeIn(lHide, t + 12.1, 0.5);
 });
 
 /* 3. Prove: circuit, trace, polynomial */
@@ -707,7 +719,7 @@ const digits = [
   Txt(PX(63.5), PY0 + 82, 'all 128 cells, read row by row', {size: 20, anchor: 'middle', fill: C.dim}),
 ];
 beat(1, 16, (t) => {
-  A.fadeOut([eth, ethT, aConv, lConv, aHide, xHide, lHide, device, devLbl], t, 0.6);
+  A.fadeOut([eth, ethT, aConv, lConv, aHide, xHide, lHide, device, devLbl, shows, showRows], t, 0.6);
   A.draw(cir, t + 0.5, 1.0); A.write(cirT, t + 0.9, 0.7); A.fadeIn(cirSub, t + 1.2, 0.5);
   A.draw([aW, aS], t + 1.6, 0.6, {lag: 0.15});
   A.flash(fW, t + 2.3, 0.7); A.flash(fS, t + 2.35, 0.7);
