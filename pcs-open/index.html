@@ -566,7 +566,7 @@ const NOTE = [
   'Frame 0 is EIP-8272’s recent root verifier frame. In the vault’s EIP-8288 program-scheme version of this transfer, a dependency frame (mode 3 in that draft; mode 4 in current upstream EIP-8288) required a proof for (data_hash, program_id) and came after the pool’s `VERIFY` frame. Under `PCS_open` there is no dependency frame: the claims come from the pool’s `VERIFY` frame itself. Estimates: EIP-8288 prices a dependency frame at 30,000 gas (plus a 30,000 `recursive_stark_gas` header share in upstream). Here the pool pays for its PIOP check (about 11,000 to 69,000 gas across the vault’s GF(2¹⁹²) models, or 12,000 to 15,000 for a narrow algebraic-hash withdrawal) plus about 20,000 gas per claim (about 108,000 to 128,000 gas total in the Keccak harness at drafted prices, or 69,000 to 89,000 if fixed claims are free), and the transaction carries a few hundred bytes of proof instead of a 96-byte dependency entry. In return each dApp keeps its own circuit and PIOP, and Ethereum fixes only the commitment layer.',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
   'As in the EIP-8288 version, the pool checks the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the `SENDER` frame’s gas limits. `MUL_FIELD` multiplies two elements of E, 24 bytes each. Whether it is an opcode or a precompile is open; an opcode is assumed here.',
-  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values; the design page writes `pOpen(v, C, x, y, π)` with `v` the version (which the contract reads from the proof, as shown in step 18) and `π` the off-chain opening proof. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
+  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 18), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values; the whiteboard and design page write `pOpen(v, C, x, y, π)` with `v` the version and `π` the off-chain opening proof. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
   'Each opening proof’s Fiat–Shamir transcript starts from the whole claim (root, size, kind, points, values), so it proves that claim and no other (up to the short list a version 1 root binds to). The claims are fully determined by the transaction and the pool’s code, which is why the wallet can prove them before sending and every node derives the same ones. The two transcripts, the pool’s with Keccak and the opening’s, are separate; a proof that they compose safely is still open.',
   'Nodes must run validation before they can check opening proofs, since the claims come from it; EIP-8288 nodes can check a proof without running any frame. An opening proof that fails condemns only itself and the peer that sent it, not the transaction.',
   '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node folds every second or specialized aggregators do is an open networking question in the vault). The recursive STARK proves that every collected opening proof verifies against its claim.',
@@ -956,7 +956,7 @@ const pChk = CHK.map(([s, lx]) => CT(pool, lx, 312, s, {size: 22}));
 const pChkM = CHK.map(([, lx]) => Check(...at(pool, lx - 20, 305), C.green, {parent: pool, k: 0.75}));
 const pOwn = CT(pool, 56, 364, 'its own verifier', {size: 20, fill: C.dim});
 const CY = [406, 462, 616, 672, 728];
-const CODE = ['z ← keccak(statement, R)', 'check the equation at z', 'PCS_open(R, z, v)', 'PCS_open(C, z, c)'];
+const CODE = ['z ← keccak(statement, R)', 'check the equation at z', 'PCS_open(ver, R, z, v)', 'PCS_open(ver, C, z, c)'];
 const pLines = CODE.map((s, i) => CT(pool, 56, CY[i], `<c>${s}</c>`, {size: 24}));
 const pApp = CT(pool, 56, CY[4], '<c>APPROVE</c>', {size: 24, fill: C.green});
 const appOk = Check(...at(pool, 196, CY[4] - 8), C.green, {parent: pool, k: 0.9});
@@ -1229,22 +1229,26 @@ beat(4, 28.5, (t) => {
 });
 
 /* 17. Upgrade: the checking splits into layers */
-const LY = [1140, 1350, 1560];
-const lay = [[C.teal, 'PIOP', 'the pool’s own verifier, frozen in its contract', C.teal], [C.purple, 'PCS', 'commit and open, checked by Ethereum', C.purple], [C.grey, 'binary field', 'with <c>MUL_FIELD</c>', C.ink]]
-  .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 150, c, {fo: 0.06}); m.a = CT(m, 44, 92, a, {size: 44, fill: lc}); m.b = CT(m, 360, 76, b, {size: 30});
+const LY = [1100, 1295, 1490];
+const lay = [[C.teal, 'PIOP', 'the pool’s own verifier, frozen in its contract', C.teal], [C.purple, 'PCS', 'commit and open, checked by Ethereum (leanPCS)', C.purple], [C.grey, 'binary field', '<m>K</m> = GF(2<sup>64</sup>), <m>E</m> = GF(2<sup>192</sup>) with <c>MUL_FIELD</c>', C.ink]]
+  .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 142, c, {fo: 0.06}); m.a = CT(m, 44, 88, a, {size: 42, fill: lc}); m.b = CT(m, 340, 72, b, {size: 29});
     // The board's cost split: the PCS is most of a STARK verifier's work, so only the PIOP stays with the contract.
-    m.c = [CT(m, 360, 118, 'the small part of a STARK · ~12–20K gas in the EVM (est., before claims)', {size: 21, fill: C.dim}),
-           CT(m, 360, 118, '~95% of a STARK’s work · ~20K gas per claim (est.), merged into one STARK per block', {size: 21, fill: C.dim}), null][i];
+    m.c = [CT(m, 340, 114, 'the small part of a STARK · ~12–20K gas in the EVM (est., before claims)', {size: 21, fill: C.dim}),
+           CT(m, 340, 114, '~95% of a STARK’s work · ~20K gas per claim (est.), merged into one STARK per block', {size: 21, fill: C.dim}), null][i];
     return m; });
-const upTag = CChip(lay[1], 1090, 75, 'upgradable', C.purple, {size: 20});
-const layArrow = Arrow(12480, 1296, 12480, 1344, C.blueL, {sw: 3});
-const layArrowL = Txt(12500, 1328, 'claims', {size: 22, fill: C.blueL});
+const upTag = CChip(lay[1], 1090, 68, 'upgradable', C.purple, {size: 20});
+const layArrow = Arrow(12480, 1248, 12480, 1290, C.blueL, {sw: 3});
+const layArrowL = Txt(12500, 1276, 'claims', {size: 22, fill: C.blueL});
+const lanesBar = Card(11400, 1672, 1200, 88, C.gold, {fo: 0.05, sw: 2});
+const lanesT = CT(lanesBar, 600, 36, 'one EIP-8288 block STARK can verify four 32-byte commitment lanes:', {size: 21, fill: C.dim, anchor: 'middle'});
+const lanesS = CT(lanesBar, 600, 68, '<k=purple>polynomials (leanPCS)</k>   ·   programs (leanVM)   ·   circuits (leanR1CS)   ·   keys (leanSPHINCS)', {size: 22, anchor: 'middle'});
 beat(5, 17.5, (t) => {
   A.fadeOut([blk, hdr, bdy, bcl, aHash, aHashL, vals, valsL, vChk, vChkM, pst], t, 0.6);
   A.cam(t, 2.4, {cx: 12000, cy: 1425});
-  lay.forEach((m, i) => { const tt = t + 1.8 + [0, 3.4, 7.6][i]; A.draw(m, tt, 0.9); A.write(m.a, tt + 0.4, 0.7); A.fadeIn(m.b, tt + 0.9, 0.6, {dx: -10}); if (m.c) A.fadeIn(m.c, tt + 1.6, 0.6, {dx: -10}); });
-  A.draw(layArrow, t + 7.2, 0.5); A.fadeIn(layArrowL, t + 7.5, 0.4);
-  A.fadeIn(upTag, t + 13.2, 0.5, {s0: 0.6}); A.pulse(upTag, t + 13.8, 0.7, 1.2);
+  lay.forEach((m, i) => { const tt = t + 1.8 + [0, 3.2, 6.8][i]; A.draw(m, tt, 0.9); A.write(m.a, tt + 0.4, 0.7); A.fadeIn(m.b, tt + 0.9, 0.6, {dx: -10}); if (m.c) A.fadeIn(m.c, tt + 1.5, 0.6, {dx: -10}); });
+  A.draw(layArrow, t + 6.6, 0.5); A.fadeIn(layArrowL, t + 6.9, 0.4);
+  A.draw(lanesBar, t + 10.2, 0.8); A.fadeIn([lanesT, lanesS], t + 10.6, 0.5, {lag: 0.2});
+  A.fadeIn(upTag, t + 13.4, 0.5, {s0: 0.6}); A.pulse(upTag, t + 14.0, 0.7, 1.2);
 });
 
 /* 18. Upgrade: a fork adds a better PCS as version 2; wallets switch */
@@ -1262,7 +1266,7 @@ const wR = MChip(11640, 748, '<m>R</m>', C.yellow, {w: 60, size: 28});
 const wTag1 = Chip(11706, 748, 'v1', C.purple, {size: 20});
 const wTag2 = Chip(12446, 748, 'v2', C.purple, {size: 20});
 beat(5, 14.5, (t) => {
-  A.fadeOut([lay, upTag, layArrow, layArrowL], t, 0.6);
+  A.fadeOut([lay, upTag, layArrow, layArrowL, lanesBar], t, 0.6);
   A.cam(t, 2.4, {cx: 12000, cy: 450});
   A.write(upH, t + 1.4, 1.2);
   A.draw(tl, t + 2.4, 0.9);
