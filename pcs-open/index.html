@@ -528,31 +528,31 @@ function MiniWrap(x, y) {
 
 /* ---------------- words (verbatim from the spec) ---------------- */
 const CAP = [
-  'Alice pays Bob privately with a post-quantum proof, using `PCS_open`. A STARK splits into a cheap logic check and a heavy commitment check: the pool contract runs the cheap check, while mempool nodes and builders merge the heavy ones into one STARK per block for validators.',
+  'Alice pays Bob privately with a post-quantum proof, using `PCS_open`. A STARK splits into a cheap logic check and a heavy commitment check: the pool contract runs the cheap check in the EVM, while clients verify and recursively aggregate the heavy ones outside the EVM.',
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
   'Her wallet keeps the witness secret: her notes, her key and their Merkle paths. It must convince the pool and validators of the public statement: the pool’s Merkle root, one nullifier per spent note, the new note commitments, the fee and a hash of this transaction.',
   'The pool’s rules are written as a circuit, a fixed list of simple arithmetic checks. Running it fills a table, the trace, with every value it computes. The wallet reads the whole table as one polynomial f, which also has a value at every other point.',
   'A polynomial commitment scheme (PCS), WHIR today, Reed–Solomon encodes f and seals it in a 32-byte Merkle root R. R binds f (up to a short list), and later the wallet can prove single values of f while hiding the rest.',
   'A PIOP turns the circuit’s checks into one polynomial identity, C(f) = Z · q, with a quotient q committed alongside f. It holds everywhere for a valid trace and fails almost everywhere for a bad one, so testing one random point is enough.',
   'That point z is a hash of the statement and R (Fiat–Shamir), so Alice can’t pick a point where a wrong trace passes. The wallet sends R and the values the identity needs at z: the proof π, a few hundred bytes.',
-  'π doesn’t yet show the values really come from the polynomial behind R. That takes an opening proof per committed polynomial, about 150 KB each (an estimate). A STARK is these two parts, a PIOP and a PCS; here the pool checks the PIOP, and mempool nodes and validators check the openings.',
+  'π doesn’t yet show the values really come from the polynomial behind R. That takes an opening proof per committed polynomial, about 150 KB each (an estimate). A STARK is these two parts: the pool runs the PIOP in the EVM, and client verifiers check and aggregate the openings outside the EVM.',
   'Her frame transaction (EIP-8141) has three frames: the first checks that her Merkle root is recent (EIP-8272), the pool’s `VERIFY` frame decides whether the transaction is valid and pays its fee, and the `SENDER` frame adds the new notes. EIP-8288’s dependency frame isn’t needed.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π sits where a signature would and authorizes this exact transaction.',
   'In its `VERIFY` frame the pool checks the nonce keys, the root, the fee and that the new notes fit. Then its own verifier recomputes z with Keccak and checks the equation using `MUL_FIELD`, a new instruction that multiplies binary field elements.',
-  'The equation also uses the circuit’s fixed tables, committed once as C in the pool’s code. Checking values against R and C would take the opening proofs, so for each the pool calls `PCS_open`, a new precompile that records a claim. Mempool nodes and the block’s STARK check every claim, and a block with a false claim is invalid.',
+  'The equation also uses the circuit’s fixed tables, committed once as C in the pool’s code. Checking values against R and C would take the opening proofs, so for each the pool calls `PCS_open`, a new precompile that records a claim. Client verifiers and the block’s STARK check every claim outside the EVM, and a block with a false claim is invalid.',
   'The wallet made its opening proofs for exactly these claims, since it computed the same z and values. A proof for any other root, point or value fails, so the claims are the only link between the pool’s check and the opening proofs.',
-  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. A node checks the nonce keys, runs the first two frames to learn the claims, then checks each opening proof against its claim.',
+  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. A node checks the nonce keys, runs the first two frames in the EVM to learn the claims, then checks each opening proof natively against its claim.',
   'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards that instead.',
   'A builder merges them into one final STARK in the block header, next to a hash of the block’s claims. Validators rederive the claims by running the transactions, check that the STARK proves exactly that list, and settle Alice’s transfer. The opening proofs themselves never go on chain.',
-  'So the STARK splits in two. The PIOP is the pool’s own check, frozen in its contract. The PCS is the protocol’s: mempool nodes check and merge openings so validators verify one proof per block, while each claim pays its price. Both use one binary field, and the protocol’s part can be upgraded.',
+  'So the STARK splits along the EVM boundary. The PIOP runs in the EVM, frozen in the pool’s contract. The PCS runs outside the EVM: client verifiers check openings and recursively aggregate them into one STARK per block, while each claim pays its price.',
   'Years later, a better PCS appears, say WHIR 2.0. `PCS_open` carries a version, which the contract reads from the proof, so a fork adds WHIR 2.0 as version 2. Wallets make fresh commitments in every proof, so they simply switch.',
-  'The hard part is the circuit commitment in the pool’s code, made under version 1 and now written C₁. Each live version is another verifier every node and aggregator runs, so a fork wants to retire version 1. Then nobody could open C₁, and the pool would stop working.',
+  'The hard part is the circuit commitment in the pool’s code, made under version 1 and now written C₁. Each live version is another native verifier every client and aggregator maintains, so a fork wants to retire version 1. Then nobody could open C₁, and the pool would stop working.',
   'Justin Drake’s idea: while version 1 still works, anyone commits the same public tables under version 2, giving C₂, and both are opened at a random point r, a hash of C₁ and C₂. If the values match, C₂ holds the same polynomial: as with z, two different polynomials almost never agree at a random point.',
   'A proposed system contract records that C₂ is equivalent to C₁. The pool still names C₁, and the wallet opens its claims through C₂. The pool’s code never changes, each circuit is recommitted once and shared by every contract using it, and version 1 can be retired.',
   'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. Today’s roots can match a short list of polynomials, so each added one must fix exactly one. And the move happens before version 1 is broken, or unmoved pools freeze.',
   'What stays fixed in the protocol is small: the binary field, `MUL_FIELD` and what a claim means, while each immutable dApp freezes its own PIOP. The PCS, its opening proofs and how they are merged can all be upgraded by fork.',
-  'Recap. The witness never leaves the wallet. The small proof π goes on chain and the pool checks it. The opening proofs stay in the mempool until they are merged into the block’s one STARK, which proves the claims.',
-  'Contracts check the PIOP. Mempool nodes and builders merge the openings, validators verify one STARK per block, and a fork can upgrade the PCS.',
+  'Recap. The witness never leaves the wallet. The small proof π goes on chain and the pool checks it in the EVM. The opening proofs stay in the mempool until clients merge them into the block’s one STARK, which proves the claims.',
+  'Contracts run the PIOP in the EVM. Clients verify and recursively aggregate the openings outside the EVM, and a fork can upgrade how.',
 ];
 const NOTE = [
   'Based on Emile’s `PCS_open` proposal as written up by Tom Wambsgans in the PCS-openings-aggregation README (github.com/TomWambsgans, commit a962947b42), with Justin Drake’s version parameter and the vault’s equivalents-registry refinement, adapted to the minimal shielded pool and compared with the EIP-8288 program-scheme version of the same transfer. Here claims are rederived from `VERIFY` execution rather than carried as headers, and fixed commitments live in contract code. Sizes and prices are model estimates, not measurements. The design is a recommendation under discussion, not a specification.',
@@ -856,11 +856,11 @@ const q2 = Txt(3170, 480, '?', {size: 130, anchor: 'middle', fill: C.yellow});
 const pile = Pile(3640, 470, 16, {w: 280, h: 380, sw: 3, hidden: true});
 const pileTop = Txt(3700, 112, 'opening proof', {size: 32, anchor: 'middle', fill: C.purple});
 const pileKB = Txt(3690, 718, '≈ 150 KB each (est.)', {size: 36, anchor: 'middle', fill: C.purple});
-const pileN1 = Txt(3690, 770, 'checked by mempool nodes, merged for validators', {size: 23, anchor: 'middle'});
+const pileN1 = Txt(3690, 770, 'verified by clients outside the EVM & recursively aggregated', {size: 21, anchor: 'middle'});
 const pileN2 = Txt(3690, 810, 'too big for a transaction', {size: 24, anchor: 'middle', fill: C.dim});
 const stSplit = Card(2980, 690, 620, 128, C.grey, {fo: 0.06, sw: 2});
 const stSplitT = CT(stSplit, 310, 44, 'STARK  =  <k=teal>PIOP</k>  +  <k=purple>PCS openings</k>', {size: 26, anchor: 'middle'});
-const stSplitS = CT(stSplit, 310, 92, 'pool contract checks <k=teal>PIOP</k>  ·  nodes & validators check <k=purple>openings</k>', {size: 19.5, fill: C.dim, anchor: 'middle'});
+const stSplitS = CT(stSplit, 310, 92, 'executed in the EVM (<k=teal>PIOP</k>)  ·  verified & aggregated by clients (<k=purple>PCS</k>)', {size: 19, fill: C.dim, anchor: 'middle'});
 beat(1, 16, (t) => {
   A.fadeOut([eqL, eqZ, eqZok, stChip, Rghost, aSt, aRh, hashB, aZ, zTok, zFly, zLine, zDot, piSz], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 3200, cy: 450});
@@ -1083,8 +1083,8 @@ const nPanel = Card(7920, 290, 530, 352, C.ink, {fill: C.stage, fo: 0.95, sw: 2}
 const npT = CT(nPanel, 20, 32, 'inside a mempool node', {size: 16, fill: C.dim});
 const np1 = CT(nPanel, 22, 72, '1.  nonce keys unused', {size: 19});
 const np1k = Check(...at(nPanel, 498, 66), C.green, {parent: nPanel, k: 0.8});
-const np2 = CT(nPanel, 22, 112, '2.  run frames 0 and 1  →  the claims', {size: 19});
-const np3 = CT(nPanel, 22, 152, '3.  check each opening proof against its claim', {size: 19});
+const np2 = CT(nPanel, 22, 112, '2.  run frames 0 and 1 in the EVM  →  the claims', {size: 18.5});
+const np3 = CT(nPanel, 22, 152, '3.  verify each opening proof natively against its claim', {size: 18.5});
 const NPY = [204, 258];
 const npC = NPY.map((ly, i) => MC(nPanel, 116, ly, i ? '<m>C</m> at <m>z</m> = <m>c</m>' : '<m>R</m> at <m>z</m> = <m>v</m>', C.blueL, {w: 170, size: 18}));
 const npL = NPY.map((ly) => CLine(nPanel, 206, ly, 290, ly, C.faint));
@@ -1230,11 +1230,11 @@ beat(4, 28.5, (t) => {
 
 /* 17. Upgrade: the checking splits into layers */
 const LY = [1100, 1295, 1490];
-const lay = [[C.teal, 'PIOP', 'the pool’s own verifier, frozen in its contract', C.teal], [C.purple, 'PCS', 'openings checked by mempool nodes, merged into the block STARK', C.purple], [C.grey, 'binary field', '<m>K</m> = GF(2<sup>64</sup>), <m>E</m> = GF(2<sup>192</sup>) with <c>MUL_FIELD</c>', C.ink]]
-  .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 142, c, {fo: 0.06}); m.a = CT(m, 44, 88, a, {size: 42, fill: lc}); m.b = CT(m, 340, 72, b, {size: i === 1 ? 26 : 29});
+const lay = [[C.teal, 'PIOP', 'executed in the EVM, frozen in the pool’s contract', C.teal], [C.purple, 'PCS', 'verified outside the EVM by clients & recursively aggregated', C.purple], [C.grey, 'binary field', '<m>K</m> = GF(2<sup>64</sup>), <m>E</m> = GF(2<sup>192</sup>) with <c>MUL_FIELD</c>', C.ink]]
+  .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 142, c, {fo: 0.06}); m.a = CT(m, 44, 88, a, {size: 42, fill: lc}); m.b = CT(m, 340, 72, b, {size: i === 1 ? 26 : 28});
     // The board's cost split: the PCS is most of a STARK verifier's work, so only the PIOP stays with the contract.
     m.c = [CT(m, 340, 114, 'the small part of a STARK · ~12–20K gas in the EVM (est., before claims)', {size: 21, fill: C.dim}),
-           CT(m, 340, 114, '~95% of a STARK’s work (leanPCS) · ~20K gas per claim (est.), verified once per block by validators', {size: 20, fill: C.dim}), null][i];
+           CT(m, 340, 114, '~95% of a STARK’s work (leanPCS) · ~20K gas per claim (est.), merged into one STARK per block', {size: 20, fill: C.dim}), null][i];
     return m; });
 const upTag = CChip(lay[1], 1090, 68, 'upgradable', C.purple, {size: 20});
 const layArrow = Arrow(12480, 1248, 12480, 1290, C.blueL, {sw: 3});
@@ -1495,7 +1495,7 @@ const r3 = {
   end: Badge(RX[3], RY[3]),
 };
 const roleLbl = Txt(RL, 690, 'role', {size: 22, fill: C.dim});
-const roleCols = [['proves'], ['checks the PIOP,', 'records claims'], ['checks openings,', 'merges them'], ['rederives claims,', 'verifies one STARK']]
+const roleCols = [['proves'], ['runs the PIOP in EVM,', 'records claims'], ['verifies openings natively,', 'aggregates them'], ['rederives claims,', 'verifies one STARK']]
   .map((ls, i) => ls.map((s, j) => Txt(RX[i], 690 + 28 * j, s, {size: 20, anchor: 'middle'})));
 beat(6, 16, (t) => {
   A.fadeIn(curtain, t, 0.7);
