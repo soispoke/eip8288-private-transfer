@@ -542,10 +542,10 @@ const CAP = [
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π sits where a signature would and authorizes this exact transaction.',
   'Every node that checks the transaction runs the pool’s code in its own EVM. In the `VERIFY` frame, the code checks the nonce keys, the root, the fee and that the new notes fit, then recomputes z with Keccak and checks the equation with `MUL_FIELD`, a new instruction for binary field multiplication.',
   'The equation also uses the circuit’s fixed tables, committed once as C in the pool’s code. Checking values against R and C would take the opening proofs, so for each the code calls `PCS_open`, a new precompile that only records a claim. Nodes check every claim natively, outside the EVM, and a block with a false claim is invalid.',
-  'The wallet made its opening proofs for exactly these claims, since it computed the same z and values. A proof for any other root, point or value fails, so the claims are the only link between the pool’s check and the opening proofs.',
+  'The wallet made its opening proofs for exactly these claims, since it computed the same z. Because z covers this transaction’s hash, the claims fit no other transaction, and a proof for any other claim fails. The claims are the only link between the pool’s check and the opening proofs.',
   'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. A node checks the nonce keys, runs the first two frames in the EVM to learn the claims, then checks each opening proof natively against its claim.',
   'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards that instead.',
-  'A builder merges them into one final STARK in the block header, next to a hash of the block’s claims. Validators rederive the claims by running the transactions, check that the STARK proves exactly that list, and settle Alice’s transfer. The opening proofs themselves never go on chain.',
+  'The builder runs the transactions too, which gives it their claims, and merges their opening proofs into one final STARK in the header, next to a hash of the claim list. Validators do the same to rederive the claims, check that the STARK proves exactly that list, and settle Alice’s transfer.',
   'So the STARK splits along the EVM boundary, and nodes do both halves. The PIOP is the pool’s frozen contract code, run in every node’s EVM. The PCS is checked natively, outside the EVM: openings are verified and recursively aggregated into one STARK per block, and each claim pays its price.',
   'Years later, a better PCS appears, say WHIR 2.0. `PCS_open` carries a version, which the contract reads from the proof, so a fork adds WHIR 2.0 as version 2. Wallets make fresh commitments in every proof, so they simply switch.',
   'The hard part is the circuit commitment in the pool’s code, made under version 1 and now written C₁. Each live version is another native verifier every client and aggregator maintains, so a fork wants to retire version 1. Then nobody could open C₁, and the pool would stop working.',
@@ -1042,6 +1042,7 @@ const CLY = 520; // top of the claims card, so its chips line up with the PCS_op
 const clm = Card(6720, CLY, 480, 250, C.blueL);
 const clmT = CT(clm, 24, 50, 'claims', {size: 30, fill: C.blueL});
 const clmS = CT(clm, 456, 48, 'recorded, not checked', {size: 20, fill: C.dim, anchor: 'end'});
+const clmW = CT(clm, 240, 290, 'kept by each node running the transaction  ·  never stored', {size: 18, fill: C.dim, anchor: 'middle'});
 const CL = [['<m>R</m> at <m>z</m> = <m>v</m>', PL.y + CY[2] - 8 - CLY], ['<m>C</m> at <m>z</m> = <m>c</m>', PL.y + CY[3] - 8 - CLY + 8]];
 const cl = CL.map(([s, ly]) => MC(clm, 240, ly, s, C.blueL, {w: 250, size: 28}));
 const cf = CL.map(([s], i) => MChip(PW(560, 0)[0], PW(0, CY[2 + i] - 8)[1], s, C.blueL, {w: 250, size: 28}));
@@ -1053,7 +1054,7 @@ beat(2, 21, (t) => {
   circumC(...PW(300, 148), 54, 40, C.green, t + 0.6, {hold: 2.4}); A.pulse(pC, t + 1.0, 0.7, 1.25);
   A.fadeOut(hiBar, t + 4.0, 0.3); A.to(hiBar, t + 4.5, 0.01, {y: hiY(2)}, {e: lin});
   A.fadeIn([pLines[2], pLines[3]], t + 6.4, 0.4, {lag: 0.3, dx: -10});
-  A.draw(clm, t + 6.8, 0.9); A.write(clmT, t + 7.2, 0.6); A.fadeIn(clmS, t + 7.5, 0.5);
+  A.draw(clm, t + 6.8, 0.9); A.write(clmT, t + 7.2, 0.6); A.fadeIn(clmS, t + 7.5, 0.5); A.fadeIn(clmW, t + 8.0, 0.5);
   [0, 1].forEach((i) => {
     const tt = t + 8.4 + i * 2.4;
     if (i) A.to(hiBar, tt - 0.4, 0.5, {y: hiY(3)}); else A.fadeIn(hiBar, tt - 0.4, 0.3);
@@ -1072,6 +1073,7 @@ const lwal = new M(LW.x + LW.w / 2, LW.y + LW.h / 2, null, 0);
 shape(lwal, rr(-LW.w / 2, -LW.h / 2, LW.w, LW.h, 20), {stroke: C.grey, sw: 2, dash: '10 8', fill: C.grey, fo: 0.03});
 const lwalT = Txt(LW.x + 30, LW.y + 48, 'Alice’s wallet, before sending', {size: 24, fill: C.dim});
 const lwalS = Txt(LW.x + 30, LW.y + 96, 'same <m>z</m> = hash(statement, <m>R</m>) and same values', {size: 24});
+const lwalB = Txt(LW.x + 30, LW.y + 134, 'the statement holds this transaction’s hash, so these claims fit no other', {size: 20, fill: C.dim});
 const LKY = [648, 712];
 const lkPile = LKY.map((y) => Pile(LW.x + 70, y, 4, {w: 34, h: 44, ox: 4, oy: -4, sw: 1.8, lines: 3}));
 const lkStamp = CL.map(([s], i) => MChip(LW.x + 250, LKY[i], s, C.purple, {w: 250, size: 28, tc: C.ink}));
@@ -1082,11 +1084,11 @@ const lkBadP = Pile(LW.x + 70, 330, 4, {w: 34, h: 44, ox: 4, oy: -4, sw: 1.8, li
 const lkBad = MChip(LW.x + 250, 330, '<m>R</m> at <m>w</m> = <m>u</m>', C.purple, {w: 250, size: 28, tc: C.ink});
 const lkBadX = Cross(LW.x + 420, 330, C.red, {k: 1.1});
 const lkBadL = Txt(LW.x + 30, 392, 'a proof for any other root, point or value fails', {size: 22, fill: C.dim});
-const LINK = [lwal, lwalT, lwalS, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL];
-beat(2, 15, (t) => {
+const LINK = [lwal, lwalT, lwalS, lwalB, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL];
+beat(2, 17.5, (t) => {
   A.fadeOut([big1, big2, big3, pool], t, 0.5);
   A.cam(t + 0.2, 2.0, {cx: 7450, cy: 450});
-  A.draw(lwal, t + 1.2, 0.9); A.fadeIn(lwalT, t + 1.6, 0.5); A.fadeIn(lwalS, t + 2.2, 0.6, {dx: -10});
+  A.draw(lwal, t + 1.2, 0.9); A.fadeIn(lwalT, t + 1.6, 0.5); A.fadeIn(lwalS, t + 2.2, 0.6, {dx: -10}); A.fadeIn(lwalB, t + 2.9, 0.5);
   A.fadeIn(lkPer, t + 3.4, 0.5);
   [0, 1].forEach((i) => { A.fadeIn(lkPile[i], t + 3.8 + i * 0.5, 0.4, {s0: 0.6}); A.fadeIn(lkStamp[i], t + 4.0 + i * 0.5, 0.4, {s0: 0.7}); });
   A.draw(lkLine, t + 5.6, 0.8, {lag: 0.2}); A.fadeIn(lkSame, t + 6.2, 0.5);
