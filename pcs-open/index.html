@@ -530,57 +530,57 @@ function MiniWrap(x, y) {
 const CAP = [
   'Alice pays Bob privately with a post-quantum proof. With `PCS_open`, checking it splits in two: a light check that every node runs as the pool’s code in its EVM, and a heavy one that nodes do natively and merge into one proof per block.',
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
-  'Her wallet holds secrets that never leave it, called the witness: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. Everyone else sees the public statement, which hides every amount except the fee.',
+  'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes the signature hash, a hash of this transaction.',
   'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
   'The pool’s rules are written as a circuit, a fixed list of simple arithmetic checks. Running it fills a table, the trace, with every value it computes. The wallet reads the whole table as one polynomial f, which also has a value at every other point.',
   'A polynomial commitment scheme (PCS), WHIR today, Reed–Solomon encodes f, spreading any change over most of the codeword, and seals it in a 32-byte Merkle root R. R binds f, up to a short list a cheater could pick from (costing at most 12 bits of security), and later opening proofs show single values of f and must hide the rest.',
   'A PIOP turns the circuit’s checks into one polynomial P(f), zero on every row of a valid trace, so P(f) = Z · q, where Z is zero on the rows and q is committed with f. A wrong trace breaks this almost everywhere, so testing one random point is enough.',
   'That point z is a hash of the statement and R (Fiat–Shamir), so Alice can’t pick a point where a wrong trace passes. The wallet sends R and the values the equation needs at z: the proof π, a few hundred bytes. These values are public, so the PIOP must blind f with randomness.',
-  'π doesn’t yet show that v really is f at z. As z is not a row, f(z) depends on every cell, so no single Merkle path shows it. An opening proof spot-checks the codeword: Merkle paths from R to about 100 random spots, then smaller folded codewords. A wrong v fails at many spots.',
-  'Each opening proof is about 150 KB, too big for a transaction. Her proof is a STARK of these two parts. The openings are most of its cost and alike for every app, so nodes check them natively and merge them per block. The PIOP is small and app-specific, so it runs as the pool’s code in every node’s EVM.',
+  'π alone doesn’t show that v is f(z). As z is not a row, f(z) depends on every cell, so no single Merkle path shows it. The wallet also makes an opening proof of f(z) = v: Merkle paths from R to about 100 random spots, then smaller folded codewords. A wrong v fails at many spots.',
+  'Her wallet makes an opening proof for each commitment: R, and the circuit’s commitment C in the pool’s code. At about 150 KB each, they travel beside the transaction. Opening proofs are most of a STARK’s cost and alike for every app, so nodes check them natively and merge them per block. The small PIOP runs as the pool’s code, in the EVM.',
   'Her frame transaction (EIP-8141) has three frames: the first checks her Merkle root is recent (EIP-8272), the pool’s `VERIFY` frame approves it and pays the fee, and the `SENDER` frame adds the new notes. The EIP-8288 version adds a fourth frame asking nodes to check a proof of the pool’s whole program; here the pool keeps its own circuit and PIOP.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π sits where a signature would and authorizes this exact transaction.',
-  'In its `VERIFY` frame the pool’s code does its usual checks, recomputes z and checks the equation with `MUL_FIELD`, a new binary-field instruction. The equation also needs the circuit’s fixed tables at z. They are as large as the trace and define which circuit is proved, so the code holds only their commitment C, and π carries their value c.',
+  'The pool’s code does its usual checks, recomputes z and checks the equation with `MUL_FIELD`, a new binary-field instruction. The equation also needs the circuit’s fixed tables, which say which check runs on each row. Computing them at z would read every cell, too much for the EVM, so the code keeps only their commitment C. π carries their value c, which, like v, needs an opening proof.',
   'For each value it can’t check itself, the code calls `PCS_open`, a new precompile that only records a claim: here, that the polynomial behind R has value v at z. Nodes check every claim natively, outside the EVM, and a block with a false claim is invalid, so the pool can approve now.',
-  'The wallet made its opening proofs for exactly these claims, since it computed the same z. Because z covers this transaction’s hash, the claims fit no other transaction, and a proof for any other claim fails. The claims are the only link between the pool’s check and the opening proofs.',
-  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. A node checks the nonce keys, runs the first two frames in the EVM to learn the claims, then checks each opening proof natively against its claim.',
+  'The wallet computed the same z, so it made opening proofs for exactly these claims. Since z hashes the statement, which includes the signature hash, the claims fit only this transaction, and proofs for other claims fail. The claims are the only link between the pool’s check and the opening proofs.',
+  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. The claims are not sent. Each node checks the nonce keys, runs the first two frames in the EVM to derive the claims itself, then checks each opening proof natively against its claim.',
   'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards that instead.',
   'The builder runs the transactions too, which gives it their claims, and merges their opening proofs into one final STARK in the header, next to a hash of the claim list. Validators do the same to rederive the claims, check that the STARK proves exactly that list, and settle Alice’s transfer.',
-  'So Alice’s proof splits along the EVM boundary: each dApp keeps its own circuit and PIOP, frozen in its code and run in every node’s EVM, while the openings are checked natively and merged into the block’s one STARK, beside other lanes of claims. A fork can upgrade the PCS, but not the binary field.',
+  'So Alice’s proof splits along the EVM boundary: each dApp keeps its own circuit and PIOP, frozen in its code and run in every node’s EVM, while the opening proofs are checked natively and merged into the block’s one STARK, beside other lanes of claims. A fork can upgrade the PCS, but not the binary field.',
   'Years later, a better PCS appears, say WHIR 2.0. Every `PCS_open` call takes its version from π, not from the contract, so a fork can add WHIR 2.0 as version 2; forks decide which versions count. Wallets make fresh commitments in every proof, so they simply switch.',
-  'The hard part is C₁, the circuit commitment made under version 1: unlike R, it is fixed in the pool’s code. Each live version is another verifier in every node and another circuit in the aggregator, so a fork wants to retire version 1, at once if it breaks. Then nobody could open C₁, and the pool would stop working.',
-  'Justin Drake’s idea: while version 1 still works, anyone commits the same public tables under version 2, giving C₂, and both are opened at a random point r, a hash of C₁ and C₂. If the values match, C₂ holds the same polynomial: as with z, two different polynomials almost never agree at a random point.',
+  'The hard part is C₁, the circuit commitment made under version 1: unlike R, it is fixed in the pool’s code. Each live version is another verifier in every node and another circuit in the block’s STARK, so a fork wants to retire version 1, at once if it breaks. Then nobody could open C₁, and the pool would stop working.',
+  'While version 1 still works, anyone commits the same fixed tables under version 2, giving C₂, and both are opened at a random point r, a hash of C₁ and C₂. If the values match, C₂ holds the same polynomial: as with z, two different polynomials almost never agree at a random point.',
   'A proposed system contract, which `PCS_open` consults, records that C₂ is equivalent to C₁. A claim is about the polynomial, so the wallet opens the pool’s claims on C₁ through C₂. The pool’s code never changes, and version 1 can be retired.',
-  'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. R may bind a short list, which costs little since z comes after it, but an added commitment stands for the circuit, so it must fix exactly one. And the move happens before version 1 breaks, since the check trusts its openings.',
+  'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. R may bind a short list, which costs little since z comes after it, but an added commitment stands for the circuit, so it must fix exactly one. And the move happens before version 1 breaks, since the check trusts its opening proofs.',
   'What stays fixed in the protocol is small, because contracts are written against it: the binary field, `MUL_FIELD` and what a claim means. The PCS, its opening proofs and how they are merged can be upgraded by fork. Each dApp’s PIOP is frozen with its contract, and the dApp answers for it.',
   'Recap. The witness never leaves the wallet. The small proof π goes on chain, and every node checks it by running the pool’s code in its EVM. The opening proofs stay in the mempool until nodes merge them into the block’s one STARK, which proves the claims.',
-  'Nodes run each contract’s PIOP in their EVM and check the openings natively, aggregating them recursively. A fork can upgrade the PCS, never a contract’s PIOP.',
+  'Nodes run each contract’s PIOP in their EVM and check the opening proofs natively, merging them recursively. A fork can upgrade the PCS, never a contract’s PIOP.',
 ];
 const NOTE = [
-  'Based on Emile’s `PCS_open` proposal as written up by Tom Wambsgans in the PCS-openings-aggregation README (github.com/TomWambsgans, commit a962947b42), with Justin Drake’s version parameter and random-point equivalence check (both recorded in that README) and a proposed refinement that keeps equivalent commitments in a system contract, adapted to the minimal shielded pool and compared with the EIP-8288 program-scheme version of the same transfer. Here claims are rederived from `VERIFY` execution rather than carried as headers, and fixed commitments live in contract code. Sizes and prices are model estimates, not measurements. The design is a recommendation under discussion, not a specification.',
+  'Based on the `PCS_open` proposal in the PCS-openings-aggregation README (github.com/TomWambsgans/PCS-openings-aggregation, commit a962947b42), including its version parameter and random-point equivalence check (section Forward compatibility), and a proposed refinement that keeps equivalent commitments in a system contract, adapted to the minimal shielded pool and compared with the EIP-8288 program-scheme version of the same transfer. Here claims are rederived from `VERIFY` execution rather than carried as headers, and fixed commitments live in contract code. Sizes and prices are model estimates, not measurements. The design is a recommendation under discussion, not a specification.',
   'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative.',
-  'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The signature hash covers the transaction except its signature bytes, where π travels, so the proof can bind to it. Hashes are Keccak-256.',
+  'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The signature hash is a hash of the whole transaction except its signature bytes, where π travels, so the statement can include it without depending on π. Hashes are Keccak-256.',
   'In proof-system terms the statement is the public input, the witness the private input, and the pool’s rules the relation between them. A nullifier is a hash of the note and her key: the same note always gives the same nullifier, so a second spend is caught, yet no one else can tell which note it belongs to. Zero knowledge means the proof reveals nothing about the witness beyond the fact that a valid one exists.',
   'The circuit encodes the relation: the rules every valid pair of statement and witness must satisfy. f takes every value in the table, read here row by row: 128 cells give the values of f at 128 points. The no-round PIOPs assumed in steps 7 to 9 use one-variable polynomials like the one plotted. `PCS_open` commits multilinear polynomials, so the wallet commits such a polynomial through its coefficients, and its value at z is the multilinear value at (z, z², z⁴, …). A real trace has millions of cells. The trace is a table over K = GF(2⁶⁴), the binary field leanVM uses for data. In a sumcheck-style PIOP (Flock) a Keccak trace is bits packed 64 to a word; in a univariate PIOP committed through its coefficients, each bit occupies a full field element.',
-  'WHIR encodes the table with a Reed–Solomon code at rate 1/4 and commits to the codeword with a Merkle tree. Strictly, a version 1 root takes no out-of-domain sample at its first level, so it fixes f only up to a short list of at most 2¹² polynomials; because z is drawn after R, this costs at most 12 bits of soundness, which applications budget for. The list exists because the opening checks that the committed word is close to a codeword, not equal to one, and at rate 1/4 in the Johnson regime one word can be close to several; an honest wallet’s root holds exactly one codeword. An out-of-domain answer fixed at commit time would pin down a single polynomial. Openings travel in public, so they must hide the data: leanVM’s zero-knowledge branch has a hiding WHIR, but its opening is zero knowledge only inside leanVM’s own outer proof, and a standalone one is still to be built (roughly 1× the size for word claims with an in-commitment mask, or about 2× for bit claims on the keyed route).',
+  'WHIR encodes the table with a Reed–Solomon code at rate 1/4 and commits to the codeword with a Merkle tree. Strictly, a version 1 root takes no out-of-domain sample at its first level, so it fixes f only up to a short list of at most 2¹² polynomials; because z is drawn after R, this costs at most 12 bits of soundness, which applications budget for. The list exists because the opening checks that the committed word is close to a codeword, not equal to one, and at rate 1/4 in the Johnson regime one word can be close to several; an honest wallet’s root holds exactly one codeword. An out-of-domain answer fixed at commit time would pin down a single polynomial. Opening proofs travel in public, so they must hide the data: leanVM’s zero-knowledge branch has a hiding WHIR, but its opening is zero knowledge only inside leanVM’s own outer proof, and a standalone one is still to be built (roughly 1× the size for word claims with an in-commitment mask, or about 2× for bit claims on the keyed route).',
   'The rules themselves hold only on the table’s rows. In a quotient-based PIOP the equation reads P(f) = Z · q, where Z vanishes on the rows and q is a helper polynomial committed together with f, and this equation holds at every point. A wrong trace makes the two sides different polynomials, which agree at only a few points (the Schwartz–Zippel lemma).',
-  'Fiat–Shamir: the pool’s own transcript, with Keccak, derives z from the statement and every proof byte read before it. Points and values live in E = GF(2¹⁹²), a degree-3 extension of K. One claim may cover several points, for example z and the next row. Claimed values are public, so the PIOP must also blind f so that they reveal nothing about the witness (with data in K and points in E, each opened E value needs three K coefficients of randomness).',
+  'Fiat–Shamir: the pool’s own transcript, with Keccak, derives z from the statement, which includes the signature hash, and every proof byte read before it. Points and values live in E = GF(2¹⁹²), a degree-3 extension of K. One claim may cover several points, for example z and the next row. Claimed values are public, so the PIOP must also blind f so that they reveal nothing about the witness (with data in K and points in E, each opened E value needs three K coefficients of randomness).',
   'What an opening proof contains, for leanVM’s hiding WHIR at 2²⁰ data words and rate 1/4: the first level opens 112 random spots of the codeword under R, each a leaf of 64 words with a Merkle path of 16 hashes. Folding (by 2⁶, then 2⁴) gives three smaller codewords, each committed with its own Merkle root and opened at 45, 28 and 20 spots (paths of 15, 14 and 13), while sumcheck messages carry the claim f(z) = v through each fold, and the last polynomial is sent in full. Counting each leaf and each distinct path node once gives about 150 KB, against 8 MB for the committed trace at this size (2²⁰ words of 8 bytes) and four times that for its codeword. If v is wrong, the committed codeword is far from that of every polynomial with value v at z, because codewords of different polynomials differ in most spots, so each spot catches the lie with probability about one half (about one bit of security per query at rate 1/4, in the Johnson regime). The trace, f and the codeword stay with the wallet; the opened spots are masked so that they reveal nothing about the witness, though a standalone zero-knowledge opening is still to be built (see the note to step 6).',
-  'Model estimates for a Keccak withdrawal over GF(2¹⁹²) in a gas model: about 408 bytes of proof with 5 claims (3 fresh, 2 fixed) for a univariate PLONK design, or about 2,392 bytes with 3 claims (2 fresh, 1 fixed; 1 fresh if the mask is stacked) for a Flock sumcheck design; a narrow algebraic-hash trace models at 176 to 248 bytes. From step 14 on, two claims (R and C) are drawn to keep the diagram simple. The opening proof estimate is for leanVM’s hiding WHIR at its smallest size, 2²⁰ data words: about 130 to 155 KB each before standalone zero knowledge (about 300 KB for a keyed bit-claim opening).',
+  'Model estimates for a Keccak withdrawal over GF(2¹⁹²) in a gas model: about 408 bytes of proof with 5 claims (3 fresh, 2 fixed) for a univariate PLONK design, or about 2,392 bytes with 3 claims (2 fresh, 1 fixed; 1 fresh if the mask is stacked) for a Flock sumcheck design; a narrow algebraic-hash trace models at 176 to 248 bytes. From this step on, two opening proofs are drawn, one for R and one for C, to keep the diagram simple. The opening proof estimate is for leanVM’s hiding WHIR at its smallest size, 2²⁰ data words: about 130 to 155 KB each before standalone zero knowledge (about 300 KB for a keyed bit-claim opening).',
   'Frame 0 is EIP-8272’s recent root verifier frame. In the EIP-8288 program-scheme version of this transfer (this site’s main animation), a dependency frame (mode 3 in that draft; mode 4 in current upstream EIP-8288) required a proof for (data_hash, program_id) and came after the pool’s `VERIFY` frame. Under `PCS_open` there is no dependency frame: the claims come from the pool’s `VERIFY` frame itself. Estimates: EIP-8288 prices a dependency frame at 30,000 gas (plus a 30,000 `recursive_stark_gas` header share in upstream). Here the pool pays for its PIOP check (about 12,000 to 20,000 gas for the narrow traces the design models, up to about 69,000 gas for a Keccak withdrawal) plus about 20,000 gas per claim (about 108,000 to 128,000 gas in total for a Keccak withdrawal at drafted prices, or 69,000 to 89,000 if fixed claims are free), and the transaction carries a few hundred bytes of proof instead of a 96-byte dependency entry. In return each dApp keeps its own circuit and PIOP, and Ethereum fixes only the commitment layer.',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
-  'The pool’s `VERIFY` code runs in the EVM of every node that handles the transaction: mempool nodes when they admit it, the builder, and every validator when it executes the block. As in the EIP-8288 version, the code checks the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the `SENDER` frame’s gas limits. `MUL_FIELD` multiplies two elements of E, 24 bytes each. Whether it is an opcode or a precompile is open; an opcode is assumed here.',
-  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 20), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values; the whiteboard writes `pOpen(v, C, x, y, π)` with `v` the version and `π` the off-chain opening proof. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
-  'Each opening proof’s Fiat–Shamir transcript starts from the whole claim (root, size, kind, points, values), so it proves that claim and no other (up to the short list a version 1 root binds to). The claims are fully determined by the transaction and the pool’s code, which is why the wallet can prove them before sending and every node derives the same ones. The two transcripts, the pool’s with Keccak and the opening’s, are separate; a proof that they compose safely is still open.',
-  'Nodes must run validation before they can check opening proofs, since the claims come from it; EIP-8288 nodes can check a proof without running any frame. An opening proof that fails condemns only itself and the peer that sent it, not the transaction.',
-  '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node folds every second or specialized aggregators do is an open networking question). The recursive STARK proves that every collected opening proof verifies against its claim.',
+  'The pool’s `VERIFY` code runs in the EVM of every node that handles the transaction: mempool nodes when they admit it, the builder, and every validator when it executes the block. As in the EIP-8288 version, the code checks the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the `SENDER` frame’s gas limits. The fixed tables (in PLONK terms, the selector and wiring polynomials) are the same for every proof, so they are committed once, without hiding, before the pool is deployed, and C is written into its code; evaluating them at z would take work in proportion to their size. `MUL_FIELD` multiplies two elements of E, 24 bytes each. Whether it is an opcode or a precompile is open; an opcode is assumed here.',
+  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 20), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
+  'Each opening proof’s Fiat–Shamir transcript starts from the whole claim (root, size, kind, points, values), so it proves that claim and no other (up to the short list a version 1 root binds to). The pool’s transcript derives z from the statement, which includes the signature hash, and from the proof bytes before it, so a claim made for one transaction is useless for another; the opening proof itself needs no binding, since reusing it for an identical claim only proves a true statement again. The claims are fully determined by the transaction and the pool’s code, which is why the wallet can prove them before sending and every node derives the same ones. The two transcripts, the pool’s with Keccak and the opening proof’s, are separate; a proof that they are secure together is still open.',
+  'The wrapper carries the transaction, with π in its signature field, and one opening proof per claim. The claims are never sent or written to the block: every node derives them by running the `VERIFY` frames. Nodes must run validation before they can check opening proofs, since the claims come from it; EIP-8288 nodes can check a proof without running any frame. An opening proof that fails condemns only itself and the peer that sent it, not the transaction.',
+  '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node merges every second or only specialized nodes do is an open networking question). The recursive STARK proves that every collected opening proof verifies against its claim.',
   'Header field `recursive_stark` = [stark_proof, block_deps_hash], as in EIP-8288. Each claim enters the sorted, deduplicated dependency list as (`PCS_OPEN_SCHEME`, hash(descriptor), R), with a scheme-binding digest. Unlike EIP-8288’s dependencies, claims are not written into the transactions; every client rederives them by running the `VERIFY` frames. Block validity: the rederived claims hash to `block_deps_hash`, the STARK verifies against it, and every transaction is valid. These checks can run in parallel. A block with a false claim is invalid.',
-  'Each immutable contract freezes its own circuit, PIOP verifier, Keccak transcript and zero-knowledge masking, which no fork can patch; their soundness and zero knowledge are the dApp’s responsibility. In the PCS_open golf, entries must prove completeness, knowledge soundness and zero knowledge in Lean against an ideal `PCS_open`. The split follows a whiteboard estimate that the PCS is about 95% of a STARK’s cost; the on-screen 12,000 to 20,000 gas for the PIOP alone is the design’s figure for narrow traces; a Keccak withdrawal models up to about 69,000 gas, before the ~20,000 gas per claim. The same recursive EIP-8288 aggregate could verify other claim types beside these once their schemes are defined: signatures with leanSPHINCS, programs written for an ISA with leanVM, and circuits with leanR1CS.',
-  'Because the contract takes the version from the proof instead of hard-coding it, the wallet chooses the version and forks control which versions are accepted. A fresh commitment’s 32-byte root binds its version, for example root = H(version ‖ inner root), so a root can’t be opened under a version other than the one it was made with. The version parameter is Justin Drake’s idea, recorded in Tom Wambsgans’ README under Forward compatibility.',
+  'Each immutable contract freezes its own circuit, PIOP verifier, Keccak transcript and zero-knowledge masking, which no fork can patch; their soundness and zero knowledge are the dApp’s responsibility. The split follows an estimate that the PCS is about 95% of a STARK’s cost; the on-screen 12,000 to 20,000 gas for the PIOP alone is the design’s figure for narrow traces; a Keccak withdrawal models up to about 69,000 gas, before the ~20,000 gas per claim. The same recursive EIP-8288 aggregate could verify other claim types beside these once their schemes are defined: signatures with leanSPHINCS, programs written for an ISA with leanVM, and circuits with leanR1CS.',
+  'Because the contract takes the version from the proof instead of hard-coding it, the wallet chooses the version and forks control which versions are accepted. A fresh commitment’s 32-byte root binds its version, for example root = H(version ‖ inner root), so a root can’t be opened under a version other than the one it was made with. The version parameter is described in the PCS-openings-aggregation README under Forward compatibility.',
   'Fixed polynomials such as circuit tables are public and committed once, without hiding, in the contract’s code. Versions should be added rarely and retired once nothing depends on them, or right away after a break.',
-  'The mechanism is Justin Drake’s, recorded in the README under Forward compatibility. The point r is derived by Fiat–Shamir from both commitments after C₂ is fixed, so C₂ can’t be chosen to fit r. Both commitments must describe a table of the same size and kind. Schwartz–Zippel: two different multilinear polynomials in m variables agree at a uniformly random point of Eᵐ with probability at most m/|E|. With m ≤ 255 and |E| = 2¹⁹², this chance agreement is below 2⁻¹⁸⁴ (for a one-variable polynomial of degree d, as plotted, d/|E|); the check as a whole is as sound as the two openings it trusts (about 2⁻¹²⁸).',
-  'The system contract maps each commitment to its registered equivalents, and anyone may add one with the random-point check. `PCS_open` takes a 32-byte handle; the prover, not the contract, names the registered equivalent the claim is opened through (where the live root travels in the transaction and how `VERIFY` reads the registry are open interface details). This protocol-level variant is a proposed refinement of Justin’s idea and is still an open choice against a registry of data hashes, in which contracts store a hash of the table data and every client recomputes its root under each version; in Justin’s original, each contract stores and migrates its own commitment.',
-  'Add, never replace: an attacker could otherwise register an equivalent commitment only it can open (one flipped codeword symbol, or private masking randomness) and lock out honest provers. One polynomial per added commitment: a commitment bound to a list of polynomials could pass the check as the real circuit and later open as a forged one; an out-of-domain answer fixed at commit time and hashed into the root prevents this. Version 1 sound: the check trusts version 1’s openings. If only the conjectures behind version 1’s list-decoding parameters prove too optimistic, the same commitment can be opened more conservatively, with roughly two to three times more queries, and nothing has to move. For a sudden break of version 1 before migration, unmigrated pools either freeze when version 1 is retired or need a one-time canonical re-commitment proof; moving after a break is itself unsafe, since a forged version 1 opening could register a fake circuit.',
+  'The README describes this check under Forward compatibility. The point r is derived by Fiat–Shamir from both commitments after C₂ is fixed, so C₂ can’t be chosen to fit r. Both commitments must describe a table of the same size and kind. Schwartz–Zippel: two different multilinear polynomials in m variables agree at a uniformly random point of Eᵐ with probability at most m/|E|. With m ≤ 255 and |E| = 2¹⁹², this chance agreement is below 2⁻¹⁸⁴ (for a one-variable polynomial of degree d, as plotted, d/|E|); the check as a whole is as sound as the two openings it trusts (about 2⁻¹²⁸).',
+  'The system contract maps each commitment to its registered equivalents, and anyone may add one with the random-point check. `PCS_open` takes a 32-byte handle; the prover, not the contract, names the registered equivalent the claim is opened through (where the live root travels in the transaction and how `VERIFY` reads the registry are open interface details). This system contract is a proposed refinement and is still an open choice against two alternatives: a registry of data hashes, in which contracts store a hash of the table data and every client recomputes its root under each version, and per-contract migration, in which each contract stores and migrates its own commitment.',
+  'Add, never replace: an attacker could otherwise register an equivalent commitment only it can open (one flipped codeword symbol, or private masking randomness) and lock out honest provers. One polynomial per added commitment: a commitment bound to a list of polynomials could pass the check as the real circuit and later open as a forged one; an out-of-domain answer fixed at commit time and hashed into the root prevents this. Version 1 sound: the check trusts version 1’s opening proofs. If only the conjectures behind version 1’s list-decoding parameters prove too optimistic, the same commitment can be opened more conservatively, with roughly two to three times more queries, and nothing has to move. For a sudden break of version 1 before migration, unmigrated pools either freeze when version 1 is retired or need a one-time canonical re-commitment proof; moving after a break is itself unsafe, since a forged version 1 opening could register a fake circuit.',
   'The binary fields are K = GF(2⁶⁴) for data and E = GF(2¹⁹²) for points and values. GF(2ᵃ) embeds in GF(2ᵇ) when a divides b: a later version whose field degree is a multiple of 192 embeds E natively through a fixed linear map of today’s 24-byte encoding, and any field whose degree is a multiple of 64 can serve E as a cubic extension of K. A future proof system not built on fields can still prove the claims, at a cost to provers. Each immutable contract also freezes its own circuit, PIOP verifier, transcript and zero-knowledge masking.',
   'On chain per transfer: the transaction with π. Claims add no bytes: every client rederives them by running the `VERIFY` frames, and the block’s STARK proves them. Off chain: the witness, which stays in the wallet, and the opening proofs, which stay in the mempool until they are merged.',
   'Compare the EIP-8288 program-scheme version of this transfer on this site’s main page.',
@@ -640,7 +640,7 @@ const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>
 const stm = Card(1040, 160, 450, 400, C.blue);
 const stmT = CT(stm, 24, 50, 'statement', {size: 32, fill: C.blue});
 const stmTag = CT(stm, 426, 48, 'public', {size: 21, fill: C.dim, anchor: 'end'});
-const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'so the proof works for this one only']];
+const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'a hash of this transaction: the proof fits it alone']];
 const stmRows = STM.map(([a, b, g], i) => [Row(stm, 106 + 56 * i, a, b, 200, {size: 23, lx: 24}), CT(stm, 24, 130 + 56 * i, g, {size: 17, fill: C.dim})]);
 /* What the proof establishes, between the private and the public side. */
 const shows = Txt(800, 214, 'the proof shows', {size: 26, anchor: 'middle'});
@@ -768,8 +768,8 @@ const OX = PX(edgeAfter(12) + 0.5), OY = SP.yAt(OX);
 const oneDot = Dot(OX, OY, C.yellow, {r: 8});
 const oneLn = Line(OX, 452, OX, OY - 11, C.yellow, {sw: 2});
 const oneLbl = Txt(OX, 440, 'one value of <m>f</m>', {size: 24, fill: C.yellow, anchor: 'middle'});
-const restLbl = Txt(1200, 784, 'openings travel in public, so they must hide the rest', {size: 23, fill: C.dim, anchor: 'middle'});
-const restLbl2 = Txt(1200, 816, '(a standalone zero-knowledge opening is still to be built)', {size: 20, fill: C.dim, anchor: 'middle'});
+const restLbl = Txt(1200, 784, 'opening proofs travel in public, so they must hide the rest', {size: 23, fill: C.dim, anchor: 'middle'});
+const restLbl2 = Txt(1200, 816, '(a standalone zero-knowledge opening proof is still to be built)', {size: 20, fill: C.dim, anchor: 'middle'});
 beat(1, 21, (t) => {
   A.fadeOut([head2, rowHi], t, 0.6);
   A.write(head3, t + 0.3, 1.0);
@@ -919,19 +919,36 @@ const pileTop = Txt(3700, 112, 'opening proof', {size: 32, anchor: 'middle', fil
 const pileKB = Txt(3690, 718, '≈ 150 KB each (est.)', {size: 36, anchor: 'middle', fill: C.purple});
 const pileN2 = Txt(3690, 770, 'small next to the trace, too big for a transaction', {size: 22, anchor: 'middle', fill: C.dim});
 const stSplit = Card(2480, 640, 820, 200, C.grey, {fo: 0.06, sw: 2});
-const stSplitT = CT(stSplit, 410, 40, 'her proof:  STARK  =  <k=teal>PIOP</k>  +  <k=purple>PCS openings</k>', {size: 24, anchor: 'middle'});
+const stSplitT = CT(stSplit, 410, 40, 'her proof:  STARK  =  <k=teal>PIOP</k>  +  <k=purple>opening proofs</k>', {size: 24, anchor: 'middle'});
 const stSplitP = CT(stSplit, 24, 94, '<k=teal>PIOP</k>  ·  small, specific to each app  ·  the pool’s code, run in every node’s EVM', {size: 20});
-const stSplitO = CT(stSplit, 24, 148, '<k=purple>PCS openings</k>  ·  ~95% of a STARK’s cost (whiteboard est.)  ·  the same for every app', {size: 20});
+const stSplitO = CT(stSplit, 24, 148, '<k=purple>opening proofs</k>  ·  ~95% of a STARK’s cost (est.)  ·  the same for every app', {size: 20});
 const stSplitO2 = CT(stSplit, 24, 178, 'checked natively, outside the EVM  ·  merged once per block', {size: 18, fill: C.dim});
-beat(1, 20.5, (t) => {
+/* One opening proof per commitment: her trace's R and the circuit's C. */
+const opHead = Txt(2870, 196, 'her wallet makes one opening proof per commitment', {size: 24, fill: C.purple});
+const OPY = [264, 346];
+const opPile = OPY.map((y) => Pile(2896, y, 4, {w: 30, h: 40, ox: 4, oy: -4, sw: 1.8, lines: 3}));
+const opChip = [MChip(2964, OPY[0], '<m>R</m>', C.yellow, {w: 50, size: 26}), MChip(2964, OPY[1], '<m>C</m>', C.green, {w: 50, size: 26})];
+const opTxt = [Txt(3006, OPY[0] + 8, 'her trace <m>f</m>', {size: 24}), Txt(3006, OPY[1] + 8, 'the circuit', {size: 24})];
+const opSub = Txt(3006, OPY[1] + 38, 'its commitment, kept in the pool’s code', {size: 18, fill: C.dim});
+const opFoot = Txt(2870, 450, 'they travel beside the transaction, not in it', {size: 20, fill: C.dim});
+const OPS = [opHead, opPile, opChip, opTxt, opSub, opFoot];
+beat(1, 21, (t) => {
   A.fadeOut([oAll, q1, q2], t, 0.7);
   A.fadeIn(pile, t + 0.8, 0.01); A.fadeIn(pile.pages, t + 0.8, 0.2, {lag: 0.07, dy: 14});
-  A.fadeIn(pileTop, t + 2.0, 0.5); A.fadeIn(pileKB, t + 2.5, 0.6);
-  A.fadeIn(pileN2, t + 4.4, 0.6);
-  A.draw(stSplit, t + 6.0, 0.8); A.fadeIn(stSplitT, t + 6.6, 0.5);
-  A.fadeIn(stSplitP, t + 8.0, 0.5, {dx: -8}); A.pulse(piC, t + 8.0, 0.7, 1.06);
-  A.fadeIn(stSplitO, t + 10.6, 0.5, {dx: -8}); A.pulse(pile, t + 10.6, 0.7, 1.04);
-  A.fadeIn(stSplitO2, t + 11.6, 0.5);
+  A.fadeIn(pileTop, t + 2.0, 0.5);
+  A.write(opHead, t + 2.4, 0.9);
+  [0, 1].forEach((i) => {
+    const tt = t + 3.4 + i * 1.6;
+    A.fadeIn(opPile[i], tt, 0.4, {s0: 0.6}); A.fadeIn(opChip[i], tt + 0.2, 0.4, {s0: 0.6}); A.fadeIn(opTxt[i], tt + 0.4, 0.5, {dx: -8});
+  });
+  A.pulse(opPile[0], t + 3.6, 0.7, 1.04);
+  A.fadeIn(opSub, t + 5.6, 0.5); A.fadeIn(opFoot, t + 6.8, 0.5, {dy: 8});
+  A.fadeIn(pileKB, t + 7.8, 0.6);
+  A.fadeIn(pileN2, t + 8.8, 0.6);
+  A.draw(stSplit, t + 10.0, 0.8); A.fadeIn(stSplitT, t + 10.6, 0.5);
+  A.fadeIn(stSplitP, t + 12.0, 0.5, {dx: -8}); A.pulse(piC, t + 12.0, 0.7, 1.06);
+  A.fadeIn(stSplitO, t + 14.6, 0.5, {dx: -8}); A.pulse(pile, t + 14.6, 0.7, 1.04);
+  A.fadeIn(stSplitO2, t + 15.6, 0.5);
 });
 
 /* 8. Transaction: the frame transaction, with no dependency frame */
@@ -969,7 +986,7 @@ const ghostThis = Txt(5100, 524, 'this version: the pool keeps its own circuit a
 const ghostG1 = Txt(4930, 752, 'both versions use EIP-8288: proofs checked outside the EVM, merged into one STARK per block', {size: 20, fill: C.dim, anchor: 'middle'});
 const ghostG2 = Txt(4930, 784, 'gas per transfer (est.): this version about 2–4× the program-proof version, at drafted prices', {size: 20, fill: C.dim, anchor: 'middle'});
 beat(2, 21, (t) => {
-  A.fadeOut([pileTop, pileKB, pileN2, pile, stSplit], t, 0.6);
+  A.fadeOut([pileTop, pileKB, pileN2, pile, stSplit, OPS], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 4930, cy: 450});
   A.fadeOut(piC, t + 0.4, 0.5); A.fadeIn(piTok, t + 0.3, 0.3, {s0: 0.6});
   A.to(piTok, t + 0.5, 2.4, {x: fPi.get('x', 0), y: fPi.get('y', 0)}); A.handoff(piTok, fPi, t + 2.9, 0.1);
@@ -1033,8 +1050,11 @@ const hiBar = new M(...at(pool, 380, CY[0] - 8), pool, 0);
 shape(hiBar, rr(-344, -24, 688, 46, 8), {fill: C.yellow, fo: 0.13});
 const hiY = (i) => at(pool, 0, CY[i] - 8)[1];
 const zSmall = Token(...at(pool, 420, CY[0] - 8), '<m>z</m>', C.yellow, {r: 18, sw: 2.5, parent: pool});
+const fxG = [CT(pool, 56, 616, '<m>C</m> commits to the circuit’s fixed tables: which check runs on each row', {size: 19, fill: C.green}),
+             CT(pool, 56, 648, 'too big to compute at <m>z</m> in the EVM, so <m>π</m> carries their value <m>c</m>', {size: 19, fill: C.dim}),
+             CT(pool, 56, 680, '<m>c</m> needs an opening proof, like <m>v</m>', {size: 19, fill: C.dim})];
 const pRun = CT(pool, 380, 806, 'this code runs in the EVM of every node that checks the transaction', {size: 21, fill: C.dim, anchor: 'middle'});
-beat(2, 20.5, (t) => {
+beat(2, 23, (t) => {
   A.fadeOut(tx, t + 0.9, 0.8);
   A.cam(t, 2.4, {cx: 6260, cy: 450});
   A.to(fPi, t + 0.3, 2.6, {x: PW(236, 0)[0], y: PW(0, 222)[1]});
@@ -1051,8 +1071,9 @@ beat(2, 20.5, (t) => {
   A.fadeIn(zSmall, t + 10.5, 0.4, {s0: 0.4}); A.pulse(zSmall, t + 11.0, 0.6, 1.25);
   A.to(hiBar, t + 12.4, 0.5, {y: hiY(1)});
   A.fadeIn(mulF, t + 13.0, 0.4, {lag: 0.2, s0: 0.6}); A.pulse(mulF, t + 14.0, 0.6, 1.12); A.fadeIn(mulS, t + 14.2, 0.5);
-  circumC(...PW(300, 148), 54, 40, C.green, t + 15.0, {hold: 2.0}); A.pulse(pC, t + 15.4, 0.7, 1.25);
-  A.fadeIn(pc, t + 17.4, 0.4, {s0: 0.5}); A.pulse(pc, t + 17.8, 0.7, 1.25); A.fadeIn(pcL, t + 17.8, 0.5);
+  circumC(...PW(300, 148), 54, 40, C.green, t + 15.4, {hold: 2.0}); A.pulse(pC, t + 15.8, 0.7, 1.25);
+  A.fadeIn(fxG, t + 16.0, 0.5, {lag: 1.4, dx: -8});
+  A.fadeIn(pc, t + 18.2, 0.4, {s0: 0.5}); A.pulse(pc, t + 18.6, 0.7, 1.25); A.fadeIn(pcL, t + 18.6, 0.5);
 });
 
 /* 11. Transaction: claims through PCS_open */
@@ -1069,6 +1090,7 @@ const big1 = Txt(6960, 364, '<c>PCS_open</c> records a claim.', {size: 30, ancho
 const big2 = Txt(6960, 412, 'It does not check it.', {size: 30, anchor: 'middle'});
 const big3 = Txt(6960, 464, 'Nodes do, natively: no valid block holds a false claim.', {size: 22, fill: C.green, anchor: 'middle'});
 beat(2, 18.5, (t) => {
+  A.fadeOut(fxG, t, 0.5);
   A.cam(t + 0.2, 2.0, {cx: 6540, cy: 450});
   A.fadeOut(hiBar, t + 0.4, 0.3); A.to(hiBar, t + 0.8, 0.01, {y: hiY(2)}, {e: lin});
   A.fadeIn([pLines[2], pLines[3]], t + 1.6, 0.4, {lag: 0.3, dx: -10});
@@ -1091,7 +1113,8 @@ const lwal = new M(LW.x + LW.w / 2, LW.y + LW.h / 2, null, 0);
 shape(lwal, rr(-LW.w / 2, -LW.h / 2, LW.w, LW.h, 20), {stroke: C.grey, sw: 2, dash: '10 8', fill: C.grey, fo: 0.03});
 const lwalT = Txt(LW.x + 30, LW.y + 48, 'Alice’s wallet, before sending', {size: 24, fill: C.dim});
 const lwalS = Txt(LW.x + 30, LW.y + 96, 'same <m>z</m> = hash(statement, <m>R</m>) and same values', {size: 24});
-const lwalB = Txt(LW.x + 30, LW.y + 134, 'the statement holds this transaction’s hash, so these claims fit no other', {size: 20, fill: C.dim});
+const lwalB = [Txt(LW.x + 30, LW.y + 134, 'the statement includes the signature hash,', {size: 20, fill: C.dim}),
+               Txt(LW.x + 30, LW.y + 160, 'so these claims fit no other transaction', {size: 20, fill: C.dim})];
 const LKY = [648, 712];
 const lkPile = LKY.map((y) => Pile(LW.x + 70, y, 4, {w: 34, h: 44, ox: 4, oy: -4, sw: 1.8, lines: 3}));
 const lkStamp = CL.map(([s], i) => MChip(LW.x + 250, LKY[i], s, C.purple, {w: 250, size: 28, tc: C.ink}));
@@ -1102,12 +1125,12 @@ const lkBadP = Pile(LW.x + 70, 330, 4, {w: 34, h: 44, ox: 4, oy: -4, sw: 1.8, li
 const lkBad = MChip(LW.x + 250, 330, '<m>R</m> at <m>w</m> = <m>u</m>', C.purple, {w: 250, size: 28, tc: C.ink});
 const lkBadX = Cross(LW.x + 420, 330, C.red, {k: 1.1});
 const lkBadL = Txt(LW.x + 30, 392, 'a proof for any other root, point or value fails', {size: 22, fill: C.dim});
-const lkCmp = [Txt(6960, 440, 'that the two checks compose safely', {size: 20, fill: C.dim, anchor: 'middle'}), Txt(6960, 468, 'is not yet proven', {size: 20, fill: C.dim, anchor: 'middle'})];
-const LINK = [lwal, lwalT, lwalS, lwalB, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL, ...lkCmp];
+const lkCmp = [Txt(6960, 440, 'that the two checks are secure together', {size: 20, fill: C.dim, anchor: 'middle'}), Txt(6960, 468, 'is not yet proven', {size: 20, fill: C.dim, anchor: 'middle'})];
+const LINK = [lwal, lwalT, lwalS, ...lwalB, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL, ...lkCmp];
 beat(2, 17, (t) => {
   A.fadeOut([big1, big2, big3, pool], t, 0.5);
   A.cam(t + 0.2, 2.0, {cx: 7450, cy: 450});
-  A.draw(lwal, t + 1.2, 0.9); A.fadeIn(lwalT, t + 1.6, 0.5); A.fadeIn(lwalS, t + 2.2, 0.6, {dx: -10}); A.fadeIn(lwalB, t + 2.9, 0.5);
+  A.draw(lwal, t + 1.2, 0.9); A.fadeIn(lwalT, t + 1.6, 0.5); A.fadeIn(lwalS, t + 2.2, 0.6, {dx: -10}); A.fadeIn(lwalB, t + 2.9, 0.5, {lag: 0.4});
   A.fadeIn(lkPer, t + 3.4, 0.5);
   [0, 1].forEach((i) => { A.fadeIn(lkPile[i], t + 3.8 + i * 0.5, 0.4, {s0: 0.6}); A.fadeIn(lkStamp[i], t + 4.0 + i * 0.5, 0.4, {s0: 0.7}); });
   A.draw(lkLine, t + 5.6, 0.8, {lag: 0.2}); A.fadeIn(lkSame, t + 6.2, 0.5);
@@ -1148,6 +1171,10 @@ rich(bwTx.inner, 0, -98, 'transaction', {size: 22, anchor: 'middle'});
 const bwPile = Pile(150, 2, 4, {w: 130, h: 170, ox: 8, oy: -9, sw: 2.4, lines: 5, parent: bigW, o: 1});
 const bwPileL = new M(150, 128, bigW, 1); rich(bwPileL.inner, 0, 0, 'opening proofs', {size: 22, anchor: 'middle', fill: C.purple});
 const bigWL = Txt(BW[0], 228, 'EIP-8288 mempool wrapper', {size: 30, anchor: 'middle', fill: C.yellow});
+const noClm = MChip(7010, 707, 'claims', C.blueL, {w: 120, size: 24});
+const noClmX = Cross(7100, 707, C.red, {k: 1.1});
+const noClmL = [Txt(7136, 700, 'not in the transaction or the wrapper', {size: 24}),
+                Txt(7136, 734, 'each node derives them itself, by running frames 0 and 1', {size: 20, fill: C.dim})];
 const NP_ = {A: [7850, 470], B: [8130, 240], C: [8130, 700], D: [8420, 460], E: [8700, 230], F: [8700, 700], G: [8980, 460]};
 const N = {};
 for (const k in NP_) N[k] = Node(NP_[k][0], NP_[k][1], {col: C.grey});
@@ -1158,7 +1185,7 @@ const nPanel = Card(7920, 290, 530, 396, C.ink, {fill: C.stage, fo: 0.95, sw: 2}
 const npT = CT(nPanel, 20, 32, 'inside a mempool node', {size: 16, fill: C.dim});
 const np1 = CT(nPanel, 22, 72, '1.  nonce keys unused', {size: 19});
 const np1k = Check(...at(nPanel, 498, 66), C.green, {parent: nPanel, k: 0.8});
-const np2 = CT(nPanel, 22, 112, '2.  run frames 0 and 1 in the EVM  →  the claims', {size: 18.5});
+const np2 = CT(nPanel, 22, 112, '2.  run frames 0 and 1 in the EVM  →  the claims (not sent)', {size: 18.5});
 const np3 = CT(nPanel, 22, 152, '3.  verify each opening proof natively against its claim', {size: 18.5});
 const NPY = [204, 258];
 const npC = NPY.map((ly, i) => MC(nPanel, 116, ly, i ? '<m>C</m> at <m>z</m> = <m>c</m>' : '<m>R</m> at <m>z</m> = <m>v</m>', C.blueL, {w: 170, size: 18}));
@@ -1167,29 +1194,30 @@ const npP = NPY.map((ly) => Pile(...at(nPanel, 318, ly + 2), 4, {w: 24, h: 32, o
 const npK = NPY.map((ly) => Check(...at(nPanel, 386, ly), C.green, {parent: nPanel, k: 0.8}));
 const npAcc = CT(nPanel, 22, 324, 'accept, keep for merging', {size: 18, fill: C.green});
 const npZK1 = CT(nPanel, 22, 356, 'opening proofs are public here, so they must be zero-knowledge', {size: 16, fill: C.dim});
-const npZK2 = CT(nPanel, 22, 378, '(a standalone zero-knowledge opening is still to be built)', {size: 16, fill: C.dim});
+const npZK2 = CT(nPanel, 22, 378, '(a standalone zero-knowledge opening proof is still to be built)', {size: 16, fill: C.dim});
 const dimmed = [N.B, N.C, N.D, N.E, N.F, N.G, ...EDGES, mpLbl];
-beat(3, 18.5, (t) => {
+beat(3, 19.5, (t) => {
   A.fadeOut([pool, clm, big1, big2, ...LINK], t + 0.3, 0.6);
   A.cam(t, 2.4, {cx: 7300, cy: 450});
   A.fadeIn(bigW, t + 1.8, 0.8); A.fadeIn(bigWL, t + 2.4, 0.6, {dy: 10});
   A.pulse(bwPile, t + 3.4, 0.8, 1.08);
-  A.fadeOut(bigWL, t + 4.6, 0.4);
-  A.group([bigW], t + 5.0, 2.2, {px: BW[0], py: BW[1], k: 0.1215, tx: 7604, ty: 466});
-  A.handoff(bigW, aliceW, t + 7.1, 0.2);
-  A.cam(t + 5.2, 2.4, {cx: 8415, cy: 450, z: 1});
-  A.draw(EDGES, t + 5.8, 0.8, {lag: 0.04}); A.fadeIn(Object.values(N), t + 5.9, 0.6, {lag: 0.08, s0: 0.5}); A.fadeIn(mpLbl, t + 6.6, 0.6);
-  A.to(aliceW, t + 7.4, 0.8, {x: 7850, y: 470, s: 0.6}); A.fadeOut(aliceW, t + 8.0, 0.3);
-  A.pulse(N.A, t + 8.1, 0.6, 1.2);
-  A.cam(t + 8.4, 1.8, {cx: 8170, cy: 470, z: 1.9});
-  A.to(dimmed, t + 8.4, 1.2, {o: 0.22});
-  A.draw(nPanel, t + 9.2, 0.8); A.fadeIn(npT, t + 9.6, 0.4);
-  A.fadeIn(np1, t + 10.0, 0.5, {dx: -8}); A.draw(np1k, t + 10.6, 0.4);
-  A.fadeIn(np2, t + 11.2, 0.5, {dx: -8}); A.fadeIn(npC, t + 11.8, 0.5, {lag: 0.25, s0: 0.6});
-  A.fadeIn(np3, t + 12.8, 0.5, {dx: -8}); A.fadeIn(npP, t + 13.3, 0.4, {lag: 0.25}); A.draw(npL, t + 13.6, 0.4, {lag: 0.25});
-  A.draw(npK, t + 14.2, 0.4, {lag: 0.3});
-  A.fadeIn([npZK1, npZK2], t + 14.6, 0.5, {lag: 0.2});
-  A.fadeIn(npAcc, t + 15.6, 0.5);
+  A.fadeIn(noClm, t + 3.8, 0.4, {s0: 0.7}); A.draw(noClmX, t + 4.3, 0.4); A.fadeIn(noClmL, t + 4.6, 0.5, {lag: 0.5, dx: -8});
+  A.fadeOut([bigWL, noClm, noClmX, ...noClmL], t + 6.6, 0.4);
+  A.group([bigW], t + 7.0, 2.2, {px: BW[0], py: BW[1], k: 0.1215, tx: 7604, ty: 466});
+  A.handoff(bigW, aliceW, t + 9.1, 0.2);
+  A.cam(t + 7.2, 2.4, {cx: 8415, cy: 450, z: 1});
+  A.draw(EDGES, t + 7.8, 0.8, {lag: 0.04}); A.fadeIn(Object.values(N), t + 7.9, 0.6, {lag: 0.08, s0: 0.5}); A.fadeIn(mpLbl, t + 8.6, 0.6);
+  A.to(aliceW, t + 9.4, 0.8, {x: 7850, y: 470, s: 0.6}); A.fadeOut(aliceW, t + 10.0, 0.3);
+  A.pulse(N.A, t + 10.1, 0.6, 1.2);
+  A.cam(t + 10.4, 1.8, {cx: 8170, cy: 470, z: 1.9});
+  A.to(dimmed, t + 10.4, 1.2, {o: 0.22});
+  A.draw(nPanel, t + 11.2, 0.8); A.fadeIn(npT, t + 11.6, 0.4);
+  A.fadeIn(np1, t + 12.0, 0.5, {dx: -8}); A.draw(np1k, t + 12.6, 0.4);
+  A.fadeIn(np2, t + 13.2, 0.5, {dx: -8}); A.fadeIn(npC, t + 13.8, 0.5, {lag: 0.25, s0: 0.6});
+  A.fadeIn(np3, t + 14.8, 0.5, {dx: -8}); A.fadeIn(npP, t + 15.3, 0.4, {lag: 0.25}); A.draw(npL, t + 15.6, 0.4, {lag: 0.25});
+  A.draw(npK, t + 16.2, 0.4, {lag: 0.3});
+  A.fadeIn([npZK1, npZK2], t + 16.6, 0.5, {lag: 0.2});
+  A.fadeIn(npAcc, t + 17.6, 0.5);
 });
 
 /* 14. Mempool: every second, the opening proofs are merged into one STARK */
@@ -1308,11 +1336,11 @@ beat(4, 19, (t) => {
 
 /* 17. Upgrade: the checking splits into layers */
 const LY = [1100, 1295, 1490];
-const lay = [[C.teal, 'PIOP', 'the pool’s frozen contract code, run in every node’s EVM', C.teal], [C.purple, 'PCS', 'checked natively by nodes & recursively aggregated', C.purple], [C.grey, 'binary field', '64-bit data, 192-bit points and values, multiplied with <c>MUL_FIELD</c>', C.ink]]
+const lay = [[C.teal, 'PIOP', 'the pool’s frozen contract code, run in every node’s EVM', C.teal], [C.purple, 'PCS', 'checked natively by nodes and merged recursively', C.purple], [C.grey, 'binary field', '64-bit data, 192-bit points and values, multiplied with <c>MUL_FIELD</c>', C.ink]]
   .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 142, c, {fo: 0.06}); m.a = CT(m, 44, 88, a, {size: 42, fill: lc}); m.b = CT(m, 340, 72, b, {size: [28, 26, 24][i]});
     // The board's cost split: the PCS is most of a STARK verifier's work, so only the PIOP stays with the contract.
     m.c = [CT(m, 340, 114, 'the small part of a STARK · ~12–20K gas in the EVM (est., before claims)', {size: 21, fill: C.dim}),
-           CT(m, 340, 114, '~95% of a STARK’s cost (whiteboard estimate) · ~20K gas per claim (est.) · one STARK per block', {size: 19, fill: C.dim}), null][i];
+           CT(m, 340, 114, '~95% of a STARK’s cost (est.) · ~20K gas per claim (est.) · one STARK per block', {size: 19, fill: C.dim}), null][i];
     return m; });
 const upTag = CChip(lay[1], 1090, 68, 'upgradable', C.purple, {size: 20});
 const fixTag = CChip(lay[2], 1090, 68, 'fixed', C.ink, {size: 20});
@@ -1439,7 +1467,7 @@ const crossPts = [13250, 13700, 14150].map((x) => Dot(x, gF(x), C.red, {r: 6}));
 const hDot = Dot(RXP, hF(RXP), C.red, {r: 10});
 const hX = Cross(RXP - 42, hF(RXP) - 40, C.red, {k: 1.1});
 const hL = Txt(RXP - 68, hF(RXP) - 31, 'values differ', {size: 26, fill: C.red, anchor: 'end'});
-const prob = Txt(13660, 1830, 'chance agreement below 2<sup>−184</sup> · the check is as sound as its two openings', {size: 26, anchor: 'middle'});
+const prob = Txt(13660, 1830, 'chance of a false match below 2<sup>−184</sup> · the check is as sound as its two opening proofs', {size: 26, anchor: 'middle'});
 const fCurves = (t) => {
   A.cam(t, 2.4, {cx: 13660, cy: 1455});
   A.draw([axX2, axY2], t + 1.0, 0.7);
@@ -1498,7 +1526,7 @@ const aRouteL = Txt(15720, 536, '<c>PCS_open</c> checks <m>C</m><sub>2</sub> is 
 const clcOk = Check(15690 + 150, 590 + 140, C.green, {k: 1.1});
 const noChange = Txt(14935, 538, 'no contract code changes', {size: 24, fill: C.green, anchor: 'middle'});
 const stamp2 = Stamp(14935, 726, 'retired', C.red, {w: 170, size: 30});
-beat(5, 16, (t) => {
+beat(5, 15.5, (t) => {
   A.fadeOut([pool2, stillL, anyL, cirB, aCommit, aCommitL, c2, c2Tag, hashB2, aH1, aH2, aRr, rTok, o1, o2, yEq, aO1, aO2, o1L, o2L,
     axX2, axY2, gC, g2C, hC, rLine, rLbl, gDot, g2Dot, sameOk, sameL, lgG, lgG2, lgH, crossPts, hDot, hX, hL, prob], t, 0.7);
   A.cam(t, 2.4, {cx: 15350, cy: 450});
@@ -1582,7 +1610,7 @@ const r3 = {
 };
 r3.zk = Txt(RX[1], RY[3] + 62, 'public in the mempool: must be zero-knowledge', {size: 20, fill: C.dim, anchor: 'middle'});
 const roleLbl = Txt(RL, 690, 'role', {size: 22, fill: C.dim});
-const roleCols = [['proves'], ['its code runs in each node’s EVM:', 'checks the PIOP, records claims'], ['verifies openings natively,', 'aggregates them'], ['rederives claims,', 'verifies one STARK']]
+const roleCols = [['proves'], ['its code runs in each node’s EVM:', 'checks the PIOP, records claims'], ['verifies opening proofs natively,', 'merges them'], ['rederives claims,', 'verifies one STARK']]
   .map((ls, i) => ls.map((s, j) => Txt(RX[i], 690 + 28 * j, s, {size: 20, anchor: 'middle'})));
 beat(6, 16, (t) => {
   A.fadeIn(curtain, t, 0.7);
@@ -1602,7 +1630,7 @@ beat(6, 16, (t) => {
 /* 26. Close: the recap stays, the caption carries the closing line, and a card lists what is still open. */
 const openCard = Card(19760, 762, 1380, 96, C.grey, {fo: 0.05, sw: 2});
 openCard.t = CT(openCard, 24, 38, 'still open', {size: 22, fill: C.dim});
-openCard.s = CT(openCard, 24, 74, 'a standalone zero-knowledge opening  ·  a proof that the two checks compose  ·  the price of a claim  ·  the upgrade mechanism  ·  which lane ships first', {size: 20});
+openCard.s = CT(openCard, 24, 74, 'a standalone zero-knowledge opening proof  ·  a security proof of both checks together  ·  the price of a claim  ·  the upgrade mechanism  ·  which lane ships first', {size: 19});
 beat(6, 9, (t) => {
   A.fadeIn([openCard, openCard.t, openCard.s], t + 1.0, 0.6);
 });
