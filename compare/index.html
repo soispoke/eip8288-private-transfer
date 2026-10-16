@@ -74,7 +74,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
     <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
   </header>
   <div class="stagebox">
-    <svg id="stage" viewBox="0 0 1600 900" role="img" aria-label="Animation comparing PCS_open and circuit claims: two proof-layer stacks, with the line between what each app sets and what Ethereum sets drawn low for PCS_open and high for circuit claims, and what follows for contracts, data, gas, safety, upgrades and what stays frozen">
+    <svg id="stage" viewBox="0 0 1600 900" role="img" aria-label="Animation: how a STARK works, layer by layer (field, circuit, PIOP, PCS) with a 4-row toy example, then where PCS_open and circuit claims each cut the stack, and what follows for contracts, data, gas, safety, upgrades and what stays frozen">
       <defs id="defs">
         <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff"/><stop offset="0.8" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
       </defs>
@@ -403,6 +403,7 @@ function MChip(x, y, label, col, o = {}) {
   const size = o.size ?? 24, w = o.w ?? 64, h = o.h ?? Math.round(size * 1.62);
   const m = new M(x, y, o.parent, o.o);
   m.w = w; m.h = h;
+  if (o.bg) shape(m, rr(-w / 2, -h / 2, w, h, o.r ?? 8), {fill: C.stage, fo: 1});
   shape(m, rr(-w / 2, -h / 2, w, h, o.r ?? 8), {stroke: col, sw: o.sw ?? 2.5, fill: col, fo: o.fo ?? 0.13});
   rich(m.inner, 0, size * 0.34, label, {size, fill: o.tc ?? col, anchor: 'middle'});
   return m;
@@ -526,8 +527,56 @@ function MiniWrap(x, y) {
   return m;
 }
 
-/* ---------------- words (verbatim from the script) ---------------- */
-const CAP = [
+/* ---------------- words (verbatim from script-v2.md, with every replacement in script-v2-review.md) ---------------- */
+const NEW_CAP = [
+  /* Part I: how a STARK works */
+  '`PCS_open` and circuit claims both verify a STARK, a post-quantum proof. To see how they differ, we first build a small STARK layer by layer, then see which layers each design leaves to the app and which it gives to Ethereum.',
+  'A prover knows secret values that satisfy some rules. It wants to convince a verifier, without revealing them, with a proof far cheaper to check than redoing the work. Our toy rule: four rows, each saying a × b = c.',
+  'Every value lives in a finite field: a fixed set of numbers where you can add, subtract, multiply and divide by anything but zero without leaving the set. In a binary field, adding is XOR. Interpolation and random-point checks need division, so every other layer is written in a field.',
+  'The circuit is the list of rules. Running the computation fills a table, the trace, with every value it produces. A valid trace makes every row’s check true; a wrong one breaks at least one row. Real circuits have millions of rows.',
+  'One standard way to write rules is R1CS. Each row checks one product, (A·w) × (B·w) = C·w: w lists all the values, and fixed tables A, B, C pick which enter each row. Our rows, a × b = c, are already in this form.',
+  'Now the key step. Read a column’s values as a polynomial’s values at the row positions: a(1), a(2), a(3), a(4). Exactly one polynomial of degree below 4 passes through them, and it also has a value at every other point of the field.',
+  'The rule on every row becomes one statement: a(x)·b(x) − c(x) is zero at every row. A polynomial that is zero at every row is a multiple of Z(x), the polynomial that is zero exactly on the rows. So the prover must find q with a·b − c = Z·q.',
+  'The verifier checks that identity at a single random point z. If the trace is wrong, the two sides are different polynomials, and two different low-degree polynomials agree at very few points. So a random z exposes a cheat almost surely.',
+  'That recipe is the PIOP: turn the rules into polynomial identities, take a random point, and check the identity there with a little arithmetic. Z(z) the verifier computes itself. The other values are left open as claims: polynomial f has value v at z.',
+  'For R1CS, PIOPs such as Spartan use sumchecks instead. “Every row holds” becomes one sum, each row’s error times a random weight, that must be zero. Each round the prover sends a small polynomial and gets a random number back, until only values at one random point remain as claims.',
+  'There is a catch. Knowing z first, a prover could invent polynomials that pass at z. So it must commit to all its polynomials, q included, before z exists, then prove its values at z match. That is the PCS’s job.',
+  'To commit, the prover evaluates each polynomial at four times as many points as there are rows: a Reed–Solomon codeword. A change to the polynomial changes most entries, so a few random spot checks will catch it. It hashes the codeword into a Merkle tree and sends only the 32-byte root R.',
+  'No verifier has to be online. The random point is a hash of the statement and everything sent so far, the root R included. So z is fixed only after R: changing it means recommitting, and each new try still almost surely fails.',
+  'But z is not one of the codeword’s positions, so no Merkle path shows f(z). Instead the prover shows that (f(x) − v) / (x − z) is again low degree, true only if f(z) is v. The prover folds it smaller over several rounds. The verifier checks the folds at random codeword positions, reading entries through Merkle paths.',
+  'One more piece. Real circuits run different checks on different rows, so the rules include fixed tables saying which check runs where, such as R1CS’s A, B, C. These are polynomials too, the same for every proof: committed once, and their values at z become claims as well.',
+  'Zero knowledge. The values at z and the opened positions are public, so they must reveal nothing about the secrets. The prover mixes randomness into each polynomial so those values look random, and salts its Merkle leaves. Both designs still need this built for their proofs.',
+  'So a STARK is a stack: the field under everything, the circuit’s rules, a PIOP that turns them into claims, and a PCS that proves them, with hashes only, no elliptic curves. Two seams separate the layers: the circuit, as data the PIOP reads, and the claims “f has value v at z”.',
+  /* Part II: where each design cuts */
+  'A design that lets Ethereum verify private apps must cut this stack somewhere: below the cut, Ethereum checks; above it, each app brings its own part. The two seams give the two designs.',
+  '`PCS_open` cuts at the claims. The app’s contract runs its own PIOP: it recomputes z, checks the identity with a new multiply instruction for the binary field, and records each claim, including those on its circuit’s commitment. Nodes check the opening proofs natively and merge them per block.',
+  'Circuit claims cut at the circuit. The app only names its circuit, written in Ethereum’s fixed format such as R1CS. The wallet sends one whole STARK, and nodes run both the PIOP, as sumchecks, and the PCS natively, then merge the proofs per block.',
+];
+const NEW_NOTE = [
+  'Companion to the two step-by-step animations of the same private transfer, and a longer version of the short comparison. Neither design is specified or built.',
+  'Running toy example: a 4-row table with columns a, b, c of bits and the rule “a × b = c on every row” (an AND, which holds the same in every binary field). Positions, the codeword and z live in a larger binary field such as GF(2⁸). Curves are drawn over the reals for intuition.',
+  'A field of 2^k elements is unique up to isomorphism. `PCS_open` fixes K = GF(2⁶⁴) for data and E = GF(2¹⁹²) for points and values; a circuit-claim format would fix its own field family.',
+  '',
+  'R1CS: rank-1 constraint system. CCS generalises R1CS, Plonkish and AIR. w starts with a constant 1 and holds the public and secret values; × is taken row by row.',
+  'Interpolation. In practice the rows are a structured domain (powers of a root, or the vertices of a hypercube for multilinear polynomials, which WHIR and Spartan use); the picture uses 1..4 for intuition. Over a finite field a polynomial’s graph is a scatter of points; the smooth curve is only a picture.',
+  'This is the quotient form used by PLONK- and AIR-style PIOPs. If one row is wrong, P is not zero there, so no polynomial q makes the equation hold. Degrees in the toy: a, b, c below 4, P at most 6, Z exactly 4, so q is at most 2. The PCS must also prove that q is that low in degree; otherwise any rational P/Z would pass.',
+  'Schwartz–Zippel: the chance they agree at a random point is at most degree / field size, e.g. about 2²¹ / 2¹⁹² = 2⁻¹⁷¹ for a million-row (2²⁰) trace in GF(2¹⁹²), since a·b − c has degree about twice the number of rows. In one variable this is just “a nonzero polynomial of degree d has at most d roots”.',
+  'PIOP: polynomial interactive oracle proof. The verifier treats the polynomials as oracles it can query at points; the PCS will make those queries honest.',
+  'The 4 rows are indexed by 2 bits, and each vector is extended to its multilinear polynomial. The weighted sum is the error vector’s multilinear extension at a random point τ, which is zero (except with tiny probability) only if every row holds. This first sumcheck takes log₂(rows) rounds and leaves values of A·w, B·w and C·w at r. A second sumcheck, of log₂(length of w) rounds, reduces those to one value of w’s extension, a committed polynomial, and values of the fixed tables A, B, C (see “The circuit is polynomials too”). Either way, a PIOP ends in claims “f has value v at a point”.',
+  '',
+  'Rate 1/4: two different polynomials of degree below n agree on at most n − 1 of the 4n points. The root binds the word exactly. It binds a polynomial only through the later proximity test, which checks that the word is close to a codeword, not equal to one. Beyond half the minimum distance several codewords can be close, so a WHIR version 1 root fixes f only up to a short list (at most 2¹² polynomials). That costs at most 12 bits of soundness, because z is drawn after R. An out-of-domain answer fixed at commit time would pin down a single polynomial. In practice all columns, q included, share one tree with one row per leaf. The toy codeword is computed in GF(2⁸) at the points 1 to 16.',
+  'Every challenge is derived this way: the sumcheck’s random numbers, z, and later the opening proof’s folding randomness and spot-check positions, each a hash of the transcript up to the last root sent.',
+  'This is the idea behind FRI-style (DEEP) openings. This quotient is not the q of step 7: it is never committed. Rate 1/4 in the Johnson regime gives about one bit of security per spot. WHIR, the PCS both designs assume today, works on multilinear polynomials: it carries the claim f(z) = v through sumcheck rounds as it folds, rather than as a quotient, and uses out-of-domain samples to bind each folded codeword. The principle is the same: with a wrong v, the word the verifier tests is far from every low-degree codeword, and random spot checks catch it. leanVM’s hiding WHIR at 2²⁰ words opens 112 spots at the first level, then 45, 28 and 20, for about 150 KB.',
+  'In PLONK terms these are the selector and wiring polynomials; in Spartan, the multilinear extensions of A, B, C, evaluated at the sumcheck’s final point. The verifier could compute their values itself, but that takes time in proportion to their size, so in general they are committed and opened. Under `PCS_open` the contract keeps this commitment C in its code. Under circuit claims the protocol keeps it, recomputed from the published circuit, and the app keeps only a hash of the tables.',
+  'Masking must preserve the circuit constraints while hiding every revealed linear combination, including values at PIOP points and opened positions. Counting random coefficients alone is not a complete zero-knowledge argument. Folded codewords need masking too. Under `PCS_open` each contract’s PIOP must blind its own values (each opened E value needs three K coefficients of randomness), and a standalone hiding opening is still to be built. Under circuit claims, zero knowledge for the lane is not built, but one protocol-owned construction could serve every app.',
+  'The small part of a proof, roots plus values at z, is a few hundred bytes for a quotient PIOP and a few KB with sumchecks. Opening proofs are about 150 KB each and most of the cost (about 95% by one estimate), which is why both designs give the PCS to Ethereum. Both also freeze a field: `PCS_open` contracts compute in it with `MUL_FIELD`, and a circuit-claim circuit is written over it.',
+  '',
+  '',
+  '',
+];
+
+/* The short version's words; its steps 5–11 are reused unchanged as the consequence steps. */
+const OLD_CAP = [
   '`PCS_open` and circuit claims are two ways to verify a private transfer’s post-quantum proof on Ethereum. They differ in one choice: where the line falls between what each app brings and what Ethereum provides.',
   'A post-quantum proof, a STARK, has layers. The circuit states the app’s rules. A PIOP checks those rules at a random point. A polynomial commitment scheme, the PCS, seals the prover’s values and proves their polynomial’s value at that point with opening proofs. Under all of it sits a field.',
   '`PCS_open` draws the line low. Ethereum provides only the PCS and the field under it. The app, here a private payment pool, keeps its circuit and its PIOP, and runs the PIOP as code in its own contract, which every node executes.',
@@ -540,7 +589,7 @@ const CAP = [
   'What each freezes for good. `PCS_open`: the binary field, its multiply instruction `MUL_FIELD` and what a claim means, plus each app’s circuit and PIOP. Circuit claims: the constraint format, its field family and each app’s circuit.',
   'In one line: `PCS_open` puts the PIOP in each app; circuit claims put it in Ethereum. Pick `PCS_open` for PIOP freedom, circuit claims for no proof code in contracts and lower on-chain gas at draft prices. Neither is built, and both can share one aggregate.',
 ];
-const NOTE = [
+const OLD_NOTE = [
   'Companion to the two step-by-step animations of the same private transfer. Neither design is specified or built.',
   'PIOP: polynomial interactive oracle proof. In both designs the PCS is WHIR today.',
   '',
@@ -553,6 +602,7 @@ const NOTE = [
   '',
   '',
 ];
+const CAP = [...NEW_CAP, ...OLD_CAP.slice(4)], NOTE = [...NEW_NOTE, ...OLD_NOTE.slice(4)];
 /* The aggregate STARK: a gold rounded badge. */
 function Badge(x, y, o = {}) {
   const k = o.k ?? 1, w = 104 * k, h = 40 * k;
@@ -623,65 +673,587 @@ const BEATS = [];
 let T = 0, B = 0;
 const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, t0, t1: T, cap: CAP[B], note: NOTE[B]}); B++; };
 
+/* ================= Part I: a STARK, layer by layer ================= */
+const MX = 950;                                   // centre of the main area; the stack column takes x < 300
+/* GF(2^8) with the AES polynomial: the toy codeword values are computed, not invented. */
+const GF = (() => {
+  const E = [], L = []; let v = 1;
+  for (let i = 0; i < 255; i++) { E[i] = v; L[v] = i; let m = v << 1; if (m & 256) m ^= 0x11b; v = m ^ v; }
+  for (let i = 255; i < 512; i++) E[i] = E[i - 255];
+  const mul = (a, b) => (a && b ? E[L[a] + L[b]] : 0), inv = (a) => E[255 - L[a]];
+  const interp = (xs, ys, x) => { let s = 0; xs.forEach((xi, i) => { let n = 1, d = 1; xs.forEach((xj, j) => { if (j !== i) { n = mul(n, x ^ xj); d = mul(d, xi ^ xj); } }); s ^= mul(ys[i], mul(n, inv(d))); }); return s; };
+  return {mul, inv, interp};
+})();
+const TOY = [[1, 1, 1], [1, 0, 0], [0, 1, 0], [1, 1, 1]];          // rows (a, b, c), a × b = c
+const ACOL = TOY.map((r) => r[0]);
+const DOM = [...Array(16)].map((_, i) => i + 1);                     // codeword positions 1..16; the rows are 1..4
+const CW_A = DOM.map((x) => GF.interp([1, 2, 3, 4], ACOL, x));
+const CW_A2 = DOM.map((x) => GF.interp([1, 2, 3, 4], [0, ...ACOL.slice(1)], x));   // row 1 of a: 1 -> 0
+const ZPT = 83, VZ = GF.interp([1, 2, 3, 4], ACOL, ZPT);
+const QW = DOM.map((x, i) => GF.mul(CW_A[i] ^ VZ, GF.inv(x ^ ZPT)));                // (f(x) - v) / (x - z)
+/* Real-valued interpolants, only for drawing the curves. */
+const lagR = (v) => (x) => [1, 2, 3, 4].reduce((s, xi, i) => s + v[i] * [1, 2, 3, 4].reduce((p, xj, j) => (j === i ? p : p * (x - xj) / (xi - xj)), 1), 0);
+const fa = lagR(ACOL), fb = lagR(TOY.map((r) => r[1])), fc = lagR(TOY.map((r) => r[2])), fcW = lagR([1, 1, 0, 1]);
+const fZ = (x) => (x - 1) * (x - 2) * (x - 3) * (x - 4);
+const fP = (x) => fa(x) * fb(x) - fc(x), fPw = (x) => fa(x) * fb(x) - fcW(x);
+const COLC = {a: C.blue, b: C.teal, c: C.gold, s: C.green, q: C.yellow};
+
+/* A table cell: a box with a centred label. */
+function Cell(x, y, w, h, s, col, o = {}) {
+  const m = new M(x, y, o.parent, 0);
+  m.w = w; m.h = h;
+  shape(m, rr(-w / 2, -h / 2, w, h, o.r ?? 6), {stroke: col, sw: o.sw ?? 2, fill: col, fo: o.fo ?? 0.1, draw: false});
+  if (s !== '' && s != null) rich(m.inner, 0, (o.size ?? 24) * 0.35, String(s), {size: o.size ?? 24, fill: o.tc ?? C.ink, anchor: 'middle'});
+  return m;
+}
+/* The toy table: (x0, y0) is the top-left of the first cell. */
+function Table(x0, y0, o = {}) {
+  const cw = o.cw ?? 76, ch = o.ch ?? 58, cols = o.cols ?? ['a', 'b', 'c'], vals = o.vals ?? TOY;
+  const Tb = {cw, ch, x: (j) => x0 + cw * j + cw / 2, y: (i) => y0 + ch * i + ch / 2};
+  Tb.hdr = cols.map((n, j) => Txt(Tb.x(j), y0 - 16, `<m>${n}</m>`, {size: o.hs ?? 32, fill: COLC[n], anchor: 'middle'}));
+  Tb.rl = vals.map((_, i) => Txt(x0 - 16, Tb.y(i) + 8, `row ${i + 1}`, {size: 22, fill: C.dim, anchor: 'end'}));
+  Tb.cells = vals.map((r, i) => cols.map((n, j) => Cell(Tb.x(j), Tb.y(i), cw - 6, ch - 6, r[j], C.grey, {size: o.size ?? 28})));
+  Tb.all = () => [...Tb.hdr, ...Tb.rl, ...Tb.cells.flat()];
+  return Tb;
+}
+const showTable = (Tb, t, o = {}) => {
+  A.fadeIn([...Tb.hdr, ...Tb.rl], t, 0.5);
+  Tb.cells.forEach((r, i) => A.fadeIn(r, t + 0.2 + (o.rowLag ?? 0.15) * i, 0.4, {lag: 0.05}));
+};
+
+/* The reference stack, top left: circuit, PIOP, PCS, field; slots fill as each layer is introduced. */
+const RS = {x: 40, w: 250, h: 54, y0: 160, g: 10};
+const rsY = (i) => RS.y0 + RS.h / 2 + i * (RS.h + RS.g);
+const rsHead = Txt(RS.x + RS.w / 2, 132, 'a STARK, layer by layer', {size: 22, fill: C.dim, anchor: 'middle'});
+const rsSlot = [0, 1, 2, 3].map((i) => Card(RS.x, rsY(i) - RS.h / 2, RS.w, RS.h, C.faint, {fo: 0, r: 10, sw: 2, dash: '6 6'}));
+const rsBox = LAYERS.map(([n], i) => { const c = Card(RS.x, rsY(i) - RS.h / 2, RS.w, RS.h, C.dim, {fo: 0.07, r: 10, sw: 2.5}); c.t = CT(c, 24, 37, n, {size: 28}); return c; });
+const rsHi = [0, 1, 2, 3].map((i) => Card(RS.x - 7, rsY(i) - RS.h / 2 - 7, RS.w + 14, RS.h + 14, C.yellow, {fo: 0, r: 14, sw: 3}));
+const rsOn = (i, t) => { A.draw(rsBox[i], t, 0.8); A.fadeIn(rsBox[i].t, t + 0.4, 0.5); A.fadeOut(rsSlot[i], t + 0.5, 0.3); };
+let hiOn = -1;
+const mark = (i, t) => { if (hiOn >= 0) A.fadeOut(rsHi[hiOn], t, 0.4); if (i >= 0) A.fadeIn(rsHi[i], t + 0.2, 0.5); hiOn = i; };
+
 /* 1. Title */
 const title = Txt(800, 330, '<k=purple><c>PCS_open</c></k>   vs   <k=orange>circuit claims</k>', {size: 66, anchor: 'middle'});
-const sub1 = Txt(800, 414, 'one difference, and what follows from it', {size: 34, anchor: 'middle', fill: C.dim});
-const sub2 = Txt(800, 540, 'both are designs under discussion  ·  numbers are estimates', {size: 24, anchor: 'middle', fill: C.dim});
+const sub1 = Txt(800, 414, 'how a STARK works, layer by layer, and where each design cuts it', {size: 34, anchor: 'middle', fill: C.dim});
+const sub2 = Txt(800, 540, 'designs under discussion  ·  numbers are estimates', {size: 24, anchor: 'middle', fill: C.dim});
 const sub3 = Txt(800, 590, 'full versions:  soispoke.github.io/eip8288-private-transfer/<k=purple>pcs-open/</k>  ·  …/<k=orange>circuit-claims/</k>', {size: 22, anchor: 'middle', fill: C.dim});
-beat(1, 13.5, (t) => {
+beat(1, 14, (t) => {
   A.write(title, t + 0.2, 1.8);
   A.fadeIn(sub1, t + 1.4, 0.8, {dy: 12});
   A.fadeIn([sub2, sub3], t + 2.2, 0.8, {dy: 10, lag: 0.3});
 });
 const POSTER = 3.4;
 
-/* 2. One stack, built layer by layer, in the centre. */
-const SL = Stack(LX, 1, {head: '<c>PCS_open</c>', col: C.purple});
-SL.layers.forEach((L) => [L.bN, L.bG, L.bE, L.name, L.gloss].forEach((m) => { m.base.x += 800 - LX; }));
-const stackHd = Txt(800, HDY - 6, 'a STARK, layer by layer', {size: 30, fill: C.dim, anchor: 'middle'});
-beat(1, 17, (t) => {
-  A.fadeOut([title, sub1, sub2, sub3], t, 0.6);
-  A.fadeIn(stackHd, t + 0.6, 0.6);
-  const at0 = [2.4, 5.0, 8.2, 14.0];
-  SL.layers.forEach((L, i) => {
-    A.draw(L.bN, t + at0[i], 0.8);
-    A.write(L.name, t + at0[i] + 0.3, 0.6);
-    A.fadeIn(L.gloss, t + at0[i] + 0.8, 0.6, {dy: 6});
-  });
-});
-
-/* 3. PCS_open draws the line low: between PIOP and PCS. */
-const tagL = Txt(LX + LW / 2 - 26, layerY(1, 1) - 6, 'run as code', {size: 22, fill: C.green, anchor: 'end'});
+/* 2. What a proof must do: a prover with a secret table, a verifier, and a proof between them. */
+const pv2 = Card(170, 130, 330, 76, C.red, {fo: 0.08, r: 14});
+pv2.t = CT(pv2, 165, 49, 'prover  <k=dim>(wallet)</k>', {size: 30, anchor: 'middle'});
+const T2 = Table(250, 290, {cw: 74, ch: 58});                       // x 250..472, y 290..522
+const veil2 = Card(240, 280, 242, 252, C.red, {fo: 0.18, r: 10, sw: 2.5});
+const sec2 = [Lock(262, 576, C.red), Txt(290, 584, 'secret values', {size: 24, fill: C.red})];
+const vf2 = Card(1110, 368, 330, 76, C.blue, {fo: 0.08, r: 14});
+vf2.t = CT(vf2, 165, 49, 'verifier  <k=dim>(node)</k>', {size: 30, anchor: 'middle'});
+const vf2s = Txt(1275, 492, 'sees only the proof', {size: 24, fill: C.dim, anchor: 'middle'});
+const ar2 = Arrow(500, 406, 1096, 406, C.dim, {sw: 3});
+const pi2 = MChip(590, 406, 'proof  <m>π</m>', C.yellow, {w: 150, size: 28, tc: C.yellow, bg: true});
+const l2a = Txt(800, 474, 'reveals nothing about the secrets', {size: 26, anchor: 'middle'});
+const l2b = Txt(800, 516, 'far cheaper to check than redoing the work', {size: 26, anchor: 'middle'});
+const rule2 = [Txt(800, 650, 'our toy', {size: 22, fill: C.dim, anchor: 'middle'}), Txt(800, 702, 'rule:  <m>a</m> × <m>b</m> = <m>c</m>,  on every row', {size: 38, fill: C.yellow, anchor: 'middle'})];
+const step2 = [pv2, ...T2.all(), veil2, ...sec2, vf2, vf2s, ar2, pi2, l2a, l2b, ...rule2];
 beat(1, 15, (t) => {
-  A.fadeOut(stackHd, t, 0.5);
-  shift([...SL.boxes(), ...SL.layers.flatMap((L) => [L.name, L.gloss])], t + 0.4, 1.3, LX - 800);
-  A.fadeIn(SL.head, t + 1.4, 0.7, {dy: 10});
-  shift(SL.below(), t + 1.9, 0.8, 0, LGAP - GAP);
-  A.fadeIn(SL.line, t + 2.4, 0.8, {dx: -40});
-  tint({...SL, layers: SL.layers.slice(2), cut: -1}, t + 3.4);
-  A.fadeIn(SL.lEth, t + 3.6, 0.6);
-  tint({...SL, layers: SL.layers.slice(0, 2)}, t + 7.2);
-  A.fadeIn(SL.lApp, t + 7.4, 0.6);
-  A.fadeIn(tagL, t + 11.0, 0.6);
+  A.fadeOut([title, sub1, sub2, sub3], t, 0.6);
+  A.draw(pv2, t + 0.8, 0.8); A.fadeIn(pv2.t, t + 1.2, 0.5);
+  showTable(T2, t + 1.5);
+  A.fadeIn(veil2, t + 2.7, 0.7); A.fadeIn(sec2, t + 2.9, 0.6);
+  A.draw(vf2, t + 4.2, 0.8); A.fadeIn(vf2.t, t + 4.6, 0.5);
+  A.draw(ar2, t + 5.8, 0.9);
+  A.fadeIn(pi2, t + 6.2, 0.3); A.to(pi2, t + 6.4, 2.0, {x: 1000});
+  A.fadeIn(l2a, t + 6.6, 0.6, {dy: 8});
+  A.fadeIn(vf2s, t + 8.4, 0.6);
+  A.fadeIn(l2b, t + 8.8, 0.6, {dy: 8});
+  A.fadeIn(rule2, t + 10.8, 0.7, {lag: 0.3, dy: 8});
 });
 
-/* 4. Circuit claims draw it high: between circuit and PIOP. */
-const SR = Stack(RX, 0, {head: 'circuit claims', col: C.orange, preCut: true});
-const tagR1 = Txt(RX + LW / 2 - 26, layerY(1, 0) - 6, 'one format, e.g. R1CS', {size: 22, fill: C.dim, anchor: 'end'});
-const tagR0 = Txt(RX + LW / 2 - 26, layerY(0, 0) - 6, 'data, not code', {size: 22, fill: C.green, anchor: 'end'});
+/* 3. Layer 1, the field: the stack column appears with its bottom layer; GF(2)'s two tables. */
+const f3h = Txt(MX, 150, 'a finite field: a fixed set of numbers', {size: 34, anchor: 'middle'});
+const f3s = Txt(MX, 196, 'add, subtract, multiply, divide by anything but 0:  you never leave the set', {size: 24, fill: C.dim, anchor: 'middle'});
+const f3g = Txt(MX, 278, 'the smallest:  GF(2) = {0, 1}', {size: 30, anchor: 'middle'});
+function OpTable(cx, op, f) {
+  const x0 = cx - 105, y0 = 312, P = (i, j) => [x0 + 35 + 70 * j, y0 + 35 + 70 * i];
+  const frame = [Cell(...P(0, 0), 62, 62, op, C.yellow, {fo: 0.12, size: 34, tc: C.yellow})];
+  [0, 1].forEach((v, k) => frame.push(Cell(...P(0, k + 1), 62, 62, v, C.faint, {fo: 0, size: 28, tc: C.dim}), Cell(...P(k + 1, 0), 62, 62, v, C.faint, {fo: 0, size: 28, tc: C.dim})));
+  const cells = [[0, 0], [0, 1], [1, 0], [1, 1]].map(([i, j]) => Cell(...P(i + 1, j + 1), 62, 62, f(i, j), C.grey, {size: 28}));
+  return {frame, cells, at: (i, j) => P(i + 1, j + 1)};
+}
+const opP = OpTable(760, '+', (i, j) => i ^ j), opM = OpTable(1140, '×', (i, j) => i & j);
+const f3x = Txt(760, 572, '+ is XOR:  1 + 1 = 0', {size: 26, anchor: 'middle'});
+const f3a = Txt(1140, 572, '× is AND:  our rule <m>a</m> × <m>b</m> = <m>c</m>', {size: 26, anchor: 'middle'});
+const f3d = Txt(MX, 662, 'interpolation and random-point checks need division', {size: 28, anchor: 'middle'});
+const f3b = Txt(MX, 742, 'the designs use bigger binary fields:  GF(2<sup>64</sup>)  and  GF(2<sup>192</sup>)', {size: 26, fill: C.dim, anchor: 'middle'});
+const step3 = [f3h, f3s, f3g, ...opP.frame, ...opP.cells, ...opM.frame, ...opM.cells, f3x, f3a, f3d, f3b];
+beat(1, 17, (t) => {
+  A.fadeOut(step2, t, 0.6);
+  A.fadeIn(rsHead, t + 0.6, 0.5); A.fadeIn(rsSlot, t + 0.8, 0.5, {lag: 0.1});
+  rsOn(3, t + 1.4); mark(3, t + 2.0);
+  A.fadeIn(f3h, t + 1.6, 0.7, {dy: 8}); A.fadeIn(f3s, t + 3.6, 0.7);
+  A.fadeIn(f3g, t + 6.2, 0.6);
+  A.fadeIn([...opP.frame, ...opM.frame], t + 7.0, 0.5); A.fadeIn([...opP.cells, ...opM.cells], t + 7.5, 0.5, {lag: 0.1});
+  circumC(...opP.at(1, 1), 62, 62, C.yellow, t + 10.0, {hold: 3});
+  A.fadeIn(f3x, t + 10.1, 0.6);
+  A.fadeIn(f3a, t + 11.2, 0.6);
+  A.fadeIn(f3d, t + 12.6, 0.6, {dy: 8}); A.fadeIn(f3b, t + 14.6, 0.6);
+});
+
+/* 4. Layer 2, the circuit and its trace: rows fill and pass; then one wrong cell breaks its row. */
+const r4 = Txt(MX, 150, 'circuit:  <m>a</m> × <m>b</m> = <m>c</m>  on every row', {size: 34, anchor: 'middle'});
+const T4 = Table(700, 262, {cw: 86, ch: 64});                       // x 700..958, y 262..518
+const t4l = Txt(684, 254, 'trace', {size: 26, fill: C.dim, anchor: 'end'});
+const ck4 = TOY.map((r, i) => Txt(1010, T4.y(i) + 10, `${r[0]} × ${r[1]} = ${r[2]}`, {size: 30}));
+const ok4 = TOY.map((_, i) => Check(1210, T4.y(i), C.green));
+const bad4 = Cell(T4.x(2), T4.y(1), 80, 58, 1, C.red, {fo: 0.3, size: 28});
+const ck4b = Txt(1010, T4.y(1) + 10, '1 × 0 ≠ 1', {size: 30, fill: C.red});
+const no4 = Cross(1210, T4.y(1), C.red);
+const m4 = [Txt(829, 566, '⋮', {size: 34, fill: C.dim, anchor: 'middle'}), Txt(MX, 650, 'real circuits:  millions of rows', {size: 28, fill: C.dim, anchor: 'middle'})];
+const step4 = [r4, ...T4.all(), t4l, ...ck4, ...ok4, bad4, ck4b, no4, ...m4];
 beat(1, 16, (t) => {
-  A.fadeIn(SR.head, t + 0.3, 0.7, {dy: 10});
-  SR.layers.forEach((L, i) => { A.draw(L.bN, t + 0.6 + 0.2 * i, 0.7); A.fadeIn([L.name, L.gloss], t + 0.9 + 0.2 * i, 0.5); });
-  A.fadeIn(SR.line, t + 2.4, 0.8, {dx: 40});
-  tint({...SR, layers: SR.layers.slice(1), cut: -1}, t + 3.4);
-  A.fadeIn(SR.lEth, t + 3.6, 0.6);
-  A.fadeIn(tagR1, t + 6.0, 0.6);
-  tint({...SR, layers: SR.layers.slice(0, 1)}, t + 9.3);
-  A.fadeIn(SR.lApp, t + 9.5, 0.6);
-  A.fadeIn(tagR0, t + 11.4, 0.6);
+  A.fadeOut(step3, t, 0.6);
+  rsOn(0, t + 0.6); mark(0, t + 1.2);
+  A.fadeIn(r4, t + 0.8, 0.7, {dy: 8});
+  A.fadeIn([...T4.hdr, ...T4.rl, t4l], t + 2.4, 0.5);
+  TOY.forEach((_, i) => {
+    A.fadeIn(T4.cells[i], t + 3.0 + 1.0 * i, 0.4, {lag: 0.1});
+    A.fadeIn(ck4[i], t + 3.4 + 1.0 * i, 0.4);
+    A.draw(ok4[i], t + 3.7 + 1.0 * i, 0.4);
+  });
+  A.handoff(T4.cells[1][2], bad4, t + 9.4, 0.4); A.pulse(bad4, t + 9.4, 0.6, 1.2);
+  A.handoff(ck4[1], ck4b, t + 9.8, 0.4);
+  A.fadeOut(ok4[1], t + 10.0, 0.3); A.draw(no4, t + 10.1, 0.4);
+  A.fadeIn(m4, t + 12.6, 0.6, {lag: 0.2});
 });
 
-/* 5. What the contract holds: from here on the stacks stay small at the top. */
+/* 5. R1CS: w as a row of cells, A, B, C as sparse grids; row 1 picks a1, b1, c1. */
+const e5 = Txt(MX, 142, '(<m>A</m>·<m>w</m>)  ×  (<m>B</m>·<m>w</m>)  =  <m>C</m>·<m>w</m>', {size: 42, anchor: 'middle'});
+const e5s = Txt(MX, 188, 'one product per row', {size: 24, fill: C.dim, anchor: 'middle'});
+const WX = (j) => 420 + 84 * j + 42;                                // 13 cells, x 420..1512
+const WL = ['1', ...[1, 2, 3, 4].flatMap((r) => ['a', 'b', 'c'].map((n) => [`<m>${n}</m><sub>${r}</sub>`, n]))];
+const w5 = WL.map((s, j) => (j ? Cell(WX(j), 290, 78, 52, s[0], COLC[s[1]], {size: 26, fo: 0.08}) : Cell(WX(0), 290, 78, 52, s, C.grey, {size: 26})));
+const w5l = [Txt(400, 301, '<m>w</m>', {size: 34, anchor: 'end'}), Txt(MX, 244, 'a constant 1, then every value of the table', {size: 22, fill: C.dim, anchor: 'middle'})];
+const G5 = ['A', 'B', 'C'].map((n, k) => {
+  const x0 = 380 + 410 * k, y0 = 452, cs = 26, col = [C.blue, C.teal, C.gold][k];
+  const g = new M(0, 0, null, 0);
+  let d = '';
+  for (let i = 0; i <= 4; i++) d += `M${x0},${y0 + cs * i} H${x0 + 13 * cs} `;
+  for (let j = 0; j <= 13; j++) d += `M${x0 + cs * j},${y0} V${y0 + 4 * cs} `;
+  shape(g, d, {stroke: C.rule, sw: 1.4, draw: false});
+  const lab = Txt(x0 - 12, y0 + 64, `<m>${n}</m>`, {size: 32, anchor: 'end'});
+  const dots = [0, 1, 2, 3].map((r) => Dot(x0 + cs * (1 + 3 * r + k) + cs / 2, y0 + cs * r + cs / 2, col, {r: 7}));
+  const hi = Card(x0 - 4, y0 - 4, 13 * cs + 8, cs + 8, C.yellow, {fo: 0.06, r: 5, sw: 2.5});
+  const ln = Line(x0 + cs * (1 + k) + cs / 2, y0 + 5, WX(1 + k), 318, col, {sw: 2.5});
+  return {g, lab, dots, hi, ln};
+});
+const g5c = Txt(MX, 604, 'fixed tables: each row picks one value', {size: 22, fill: C.dim, anchor: 'middle'});
+const r5 = Txt(MX, 680, 'row 1:   (<m>A</m>·<m>w</m>)<sub>1</sub> × (<m>B</m>·<m>w</m>)<sub>1</sub> = (<m>C</m>·<m>w</m>)<sub>1</sub>   means   <m>a</m><sub>1</sub> × <m>b</m><sub>1</sub> = <m>c</m><sub>1</sub>', {size: 30, anchor: 'middle'});
+const y5 = Txt(MX, 760, 'our rows are already in this form', {size: 28, fill: C.green, anchor: 'middle'});
+const step5 = [e5, e5s, ...w5, ...w5l, ...G5.flatMap((g) => [g.g, g.lab, ...g.dots, g.hi, g.ln]), g5c, r5, y5];
+beat(1, 16, (t) => {
+  A.fadeOut(step4, t, 0.6);
+  A.write(e5, t + 0.8, 1.4); A.fadeIn(e5s, t + 2.0, 0.6);
+  A.fadeIn(w5l[0], t + 4.2, 0.5); A.fadeIn(w5, t + 4.3, 0.4, {lag: 0.06}); A.fadeIn(w5l[1], t + 5.4, 0.6);
+  G5.forEach((g, k) => { A.fadeIn([g.g, g.lab], t + 7.0 + 0.5 * k, 0.5); A.fadeIn(g.dots, t + 7.2 + 0.5 * k, 0.4, {lag: 0.08}); });
+  A.fadeIn(g5c, t + 8.6, 0.6);
+  G5.forEach((g, k) => { A.fadeIn(g.hi, t + 9.8 + 0.3 * k, 0.4); A.draw(g.ln, t + 10.0 + 0.3 * k, 0.7); });
+  A.fadeIn(r5, t + 11.3, 0.7, {dy: 8});
+  A.fadeIn(y5, t + 13.2, 0.6, {dy: 8});
+});
+
+/* 6. Columns become polynomials: column a's values fly onto a plot; one cubic passes through them. */
+const X6 = (x) => 560 + (x - 0.5) * 196, Y6 = (y) => 680 - y * 80, iX6 = (px) => (px - 560) / 196 + 0.5;
+const ax6 = [Line(560, 680, 1530, 680, C.dim, {sw: 2}), Line(560, 700, 560, 100, C.dim, {sw: 2})];
+const tk6 = [1, 2, 3, 4, 5].map((k) => Txt(X6(k), 716, String(k), {size: 22, fill: C.dim, anchor: 'middle'}));
+const yk6 = [Txt(544, 688, '0', {size: 22, fill: C.dim, anchor: 'end'}), Txt(544, 608, '1', {size: 22, fill: C.dim, anchor: 'end'})];
+const xl6 = Txt(1530, 716, '<m>x</m>', {size: 26, fill: C.dim, anchor: 'end'});
+const col6h = Txt(440, 236, '<m>a</m>', {size: 32, fill: C.blue, anchor: 'middle'});
+const col6 = ACOL.map((v, i) => Cell(440, 284 + 70 * i, 70, 62, v, C.blue, {size: 28}));
+const col6r = ACOL.map((_, i) => Txt(392, 292 + 70 * i, `row ${i + 1}`, {size: 22, fill: C.dim, anchor: 'end'}));
+const dot6 = ACOL.map((v, i) => Dot(440, 284 + 70 * i, C.blue, {r: 9}));
+const lb6 = ACOL.map((v, i) => (i === 3 ? Txt(X6(4) + 18, Y6(1) + 36, '<m>a</m>(4)', {size: 24, fill: C.blue}) : Txt(X6(i + 1), Y6(v) - 30, `<m>a</m>(${i + 1})`, {size: 24, fill: C.blue, anchor: 'middle'})));
+const cv6 = Curve(fpath((px) => Y6(fa(iX6(px))), X6(0.62), X6(5.0)), C.blue, {sw: 3.5});
+const dg6 = Txt(880, 250, 'the only polynomial of degree < 4 through them', {size: 26, anchor: 'middle'});
+const ex6 = [Line(X6(5), 680, X6(5), Y6(7) + 14, C.yellow, {sw: 2, dash: '6 6'}), Dot(X6(5), Y6(7), C.yellow, {r: 10}), Txt(X6(5) - 24, Y6(7) + 8, '<m>a</m>(5):  defined, but not in the table', {size: 24, fill: C.yellow, anchor: 'end'})];
+const step6 = [...ax6, ...tk6, ...yk6, xl6, col6h, ...col6, ...col6r, ...dot6, ...lb6, cv6, dg6, ...ex6];
+beat(2, 17, (t) => {
+  A.fadeOut(step5, t, 0.6); mark(-1, t);
+  A.fadeIn([...ax6, ...tk6, ...yk6, xl6], t + 0.8, 0.6);
+  A.fadeIn([col6h, ...col6r], t + 1.0, 0.5); A.fadeIn(col6, t + 1.2, 0.4, {lag: 0.12});
+  ACOL.forEach((v, i) => {
+    const tt = t + 2.6 + 1.0 * i;
+    A.fadeIn(dot6[i], tt, 0.2); A.to(dot6[i], tt + 0.1, 0.8, {x: X6(i + 1), y: Y6(v)});
+    A.fadeIn(lb6[i], tt + 0.7, 0.4);
+  });
+  A.draw(cv6, t + 7.4, 1.6);
+  A.fadeIn(dg6, t + 8.6, 0.6, {dy: 8});
+  A.draw(ex6[0], t + 11.8, 0.6); A.fadeIn(ex6[1], t + 12.3, 0.3, {s0: 0.4}); A.fadeIn(ex6[2], t + 12.6, 0.6);
+});
+
+/* 7. All rows at once: P = a·b − c is zero on the rows, so it is Z·q. */
+const X7 = (x) => 420 + (x - 0.8) * 320, Y7 = (y) => 420 - y * 165, iX7 = (px) => (px - 420) / 320 + 0.8;
+const ax7 = Line(400, 420, 1530, 420, C.dim, {sw: 2});
+const gd7 = [1, 2, 3, 4].map((k) => Line(X7(k), 262, X7(k), 650, C.rule, {sw: 1.5, dash: '4 8'}));
+const tk7 = [1, 2, 3, 4].map((k) => Txt(X7(k), 690, `row ${k}`, {size: 22, fill: C.dim, anchor: 'middle'}));
+const pathP = fpath((px) => Y7(fP(iX7(px))), X7(0.8), X7(4.2));
+const cP = Curve(pathP, C.ink, {sw: 3.5});
+const cZ = Curve(fpath((px) => Y7(fZ(iX7(px))), X7(0.8), X7(4.2)), C.grey, {sw: 3});
+const lgP = Txt(960, 170, '<m>P</m>(<m>x</m>) = <m>a</m>(<m>x</m>)·<m>b</m>(<m>x</m>) − <m>c</m>(<m>x</m>)', {size: 30, anchor: 'middle'});
+const lgZ = Txt(960, 224, '<m>Z</m>(<m>x</m>) = (<m>x</m> − 1)(<m>x</m> − 2)(<m>x</m> − 3)(<m>x</m> − 4):  zero exactly on the rows', {size: 26, fill: C.grey, anchor: 'middle'});
+const z7 = [1, 2, 3, 4].map((k) => Dot(X7(k), 420, C.yellow, {r: 8}));
+const z7l = Txt(X7(2.5), 474, 'zero at every row', {size: 24, fill: C.yellow, anchor: 'middle'});
+const eq7 = Txt(MX, 772, '<m>a</m>·<m>b</m> − <m>c</m>   =   <m>Z</m> · <m>q</m>', {size: 44, anchor: 'middle'});
+const q7 = Txt(MX, 834, '<m>q</m>:  a helper polynomial, supplied by the prover', {size: 26, fill: C.yellow, anchor: 'middle'});
+beat(2, 18, (t) => {
+  A.fadeOut(step6, t, 0.6);
+  A.fadeIn([ax7, ...gd7, ...tk7], t + 0.6, 0.6);
+  A.draw(cP, t + 1.2, 1.4); A.fadeIn(lgP, t + 1.6, 0.6);
+  A.fadeIn(z7, t + 3.8, 0.3, {lag: 0.15, s0: 0.4}); A.fadeIn(z7l, t + 4.4, 0.6);
+  A.draw(cZ, t + 7.6, 1.4); A.fadeIn(lgZ, t + 8.0, 0.6);
+  A.write(eq7, t + 13.2, 1.2);
+  A.fadeIn(q7, t + 14.8, 0.6, {dy: 8});
+});
+
+/* 8. One random point is enough: a wrong trace's a·b − c meets Z·q at 3 points only; z shows the gap. */
+const ZX = 1.6;
+const cQ = Curve(pathP, C.yellow, {sw: 3.5});
+const cW = Curve(fpath((px) => Y7(fPw(iX7(px))), X7(0.8), X7(4.2)), C.red, {sw: 3.5});
+const lgQ = Txt(1080, 170, '<m>Z</m>·<m>q</m>', {size: 30, fill: C.yellow, anchor: 'middle'});
+const lgW = Txt(1080, 224, '<m>a</m>·<m>b</m> − <m>c</m>,  with row 2 wrong  (<m>c</m><sub>2</sub> = 1)', {size: 28, fill: C.red, anchor: 'middle'});
+const zz8 = [Line(X7(ZX), 290, X7(ZX), 650, C.yellow, {sw: 2.5, dash: '7 7'}), Txt(X7(ZX), 276, '<m>z</m>', {size: 32, fill: C.yellow, anchor: 'middle'})];
+const cr8 = [1, 3, 4].map((k) => Dot(X7(k), 420, C.ink, {r: 8}));
+const cr8l = Txt(X7(3.5), 334, 'they agree at only 3 points', {size: 24, anchor: 'middle'});
+const gap8 = [Line(X7(ZX), Y7(fP(ZX)), X7(ZX), Y7(fPw(ZX)), C.red, {sw: 6}), Dot(X7(ZX), Y7(fP(ZX)), C.yellow, {r: 8}), Dot(X7(ZX), Y7(fPw(ZX)), C.red, {r: 8})];
+const b8a = Txt(MX, 762, 'at <m>z</m> the two sides differ:  the cheat is caught', {size: 28, fill: C.red, anchor: 'middle'});
+const b8b = Txt(MX, 826, 'chance of a miss  ≤  degree / field size,  e.g. 2<sup>21</sup> / 2<sup>192</sup>', {size: 26, fill: C.dim, anchor: 'middle'});
+const step78 = [ax7, ...gd7, ...tk7, cP, cZ, lgP, lgZ, ...z7, z7l, eq7, q7, cQ, cW, lgQ, lgW, ...zz8, ...cr8, cr8l, ...gap8, b8a, b8b];
+beat(2, 17, (t) => {
+  A.fadeOut([lgP, lgZ, cZ, eq7, q7, z7l, ...z7], t, 0.6);
+  A.handoff(cP, cQ, t + 0.6, 0.6); A.fadeIn(lgQ, t + 0.8, 0.6);
+  A.draw(zz8[0], t + 1.6, 0.7); A.fadeIn(zz8[1], t + 1.8, 0.5);
+  A.fadeIn(lgW, t + 4.2, 0.6);
+  A.draw(cW, t + 5.0, 1.5);
+  A.fadeIn(cr8, t + 9.3, 0.3, {lag: 0.2, s0: 0.4}); A.fadeIn(cr8l, t + 9.8, 0.6);
+  A.fadeIn(gap8.slice(1), t + 12.2, 0.3, {s0: 0.4}); A.draw(gap8[0], t + 12.4, 0.5);
+  A.fadeIn(b8a, t + 12.8, 0.6, {dy: 8});
+  A.fadeIn(b8b, t + 14.6, 0.6);
+});
+
+/* 9. Layer 3, the PIOP: the identity checked at z; Z(z) is computed, the other values become claims. */
+const box9 = Card(430, 214, 1040, 268, C.dim, {fo: 0.05, r: 16});
+box9.t = CT(box9, 28, 44, 'PIOP verifier', {size: 26, fill: C.dim});
+const T9 = [['<m>a</m>(<m>z</m>)', 560], ['·', 640], ['<m>b</m>(<m>z</m>)', 720], ['−', 800], ['<m>c</m>(<m>z</m>)', 880], ['=', 970], ['<m>Z</m>(<m>z</m>)', 1070], ['·', 1160], ['<m>q</m>(<m>z</m>)', 1250]]
+  .map(([s, x]) => Txt(x, 314, s, {size: 40, anchor: 'middle'}));
+const qm9 = Txt(1340, 314, '?', {size: 40, fill: C.dim, anchor: 'middle'});
+const ok9 = Check(1345, 300, C.green, {k: 1.3});
+const z9 = [Token(800, 132, '<m>z</m>', C.yellow, {r: 28}), Txt(842, 142, 'a random point', {size: 24, fill: C.yellow})];
+const V9 = [['a', 560], ['b', 720], ['c', 880], ['q', 1250]].map(([n, x]) => MChip(x, 392, `<m>v</m><sub>${n}</sub>`, COLC[n], {w: 78, size: 28, tc: C.ink}));
+const vZ9 = MChip(1070, 392, '<m>Z</m>(<m>z</m>)', C.grey, {w: 100, size: 26, tc: C.ink});
+const lZ9 = Txt(1070, 452, 'computed by the verifier', {size: 22, fill: C.grey, anchor: 'middle'});
+const cl9l = Txt(MX, 548, 'left open, as claims:', {size: 24, fill: C.dim, anchor: 'middle'});
+const CL9 = [['a', 720, 610], ['b', 1180, 610], ['c', 720, 690], ['q', 1180, 690]].map(([n, x, y]) => MChip(x, y, `<m>${n}</m>  has value  <m>v</m><sub>${n}</sub>  at  <m>z</m>`, COLC[n], {w: 400, size: 26, tc: C.ink}));
+const step9 = [box9, ...T9, qm9, ok9, ...z9, ...V9, vZ9, lZ9, cl9l, ...CL9];
+beat(2, 17, (t) => {
+  A.fadeOut(step78, t, 0.6);
+  rsOn(1, t + 0.6); mark(1, t + 1.2);
+  A.draw(box9, t + 1.0, 0.8); A.fadeIn(box9.t, t + 1.4, 0.5);
+  A.fadeIn([...T9, qm9], t + 1.8, 0.5, {lag: 0.08});
+  A.fadeIn(z9, t + 3.8, 0.5, {s0: 0.6});
+  A.fadeIn([...V9.slice(0, 3), vZ9, V9[3]], t + 5.6, 0.5, {lag: 0.3, dy: -10});
+  A.handoff(qm9, ok9, t + 8.0, 0.3); A.draw(ok9, t + 8.0, 0.5);
+  circumC(1070, 392, 100, 40, C.yellow, t + 9.5, {hold: 2}); A.fadeIn(lZ9, t + 9.7, 0.6);
+  A.fadeIn(cl9l, t + 11.4, 0.5);
+  A.fadeIn(CL9, t + 11.9, 0.5, {lag: 0.5, dy: -12});
+});
+
+/* 10. The sumcheck way: 4 rows on 2 bits; each round fixes one bit at a random number. */
+const h10 = Txt(MX, 140, 'for R1CS:  sumchecks, as in Spartan', {size: 32, anchor: 'middle'});
+const s10 = Txt(MX, 198, 'one sum:   Σ over rows of  (random weight × row error)  =  0', {size: 28, anchor: 'middle'});
+const g10l = Txt(530, 280, '4 rows, as 2 bits', {size: 22, fill: C.dim, anchor: 'middle'});
+const g10 = ['00', '01', '10', '11'].map((b, i) => Cell(475 + 110 * (i >> 1), 330 + 80 * (i & 1), 100, 68, `<c>${b}</c>`, C.grey, {size: 26}));
+const rd10 = [1, 2].map((k) => {
+  const x = k === 1 ? 768 : 1172;
+  return {
+    h: Txt(x, 280, `round ${k}`, {size: 22, fill: C.dim, anchor: 'middle'}),
+    g: MChip(x, 330, `prover:  <m>g</m><sub>${k}</sub>(<m>X</m>)`, C.blue, {w: 196, size: 24, tc: C.ink}),
+    r: MChip(x, 410, `verifier:  <m>r</m><sub>${k}</sub>`, C.yellow, {w: 196, size: 24, tc: C.ink}),
+  };
+});
+const f10a = [0, 1].map((b) => Cell(968, 330 + 80 * b, 124, 68, `(<m>r</m><sub>1</sub>, ${b})`, C.yellow, {size: 26, fo: 0.08}));
+const f10b = Cell(1390, 370, 150, 72, '(<m>r</m><sub>1</sub>, <m>r</m><sub>2</sub>)', C.yellow, {size: 28, fo: 0.15, sw: 3});
+const n10 = Txt(MX, 500, 'rounds  =  log<sub>2</sub>(rows)  =  2', {size: 24, fill: C.dim, anchor: 'middle'});
+const cl10l = Txt(MX, 566, 'left open:  values at the random point  <m>r</m> = (<m>r</m><sub>1</sub>, <m>r</m><sub>2</sub>)', {size: 24, fill: C.dim, anchor: 'middle'});
+const CL10 = [['A', C.blue, 600], ['B', C.teal, MX], ['C', C.gold, 1300]].map(([n, col, x]) => MChip(x, 624, `<m>${n}</m>·<m>w</m>  at  <m>r</m>`, col, {w: 220, size: 26, tc: C.ink}));
+const sw10 = Txt(MX, 700, 'a second sumcheck turns these into one claim on <m>w</m>', {size: 22, fill: C.dim, anchor: 'middle'});
+const ew10 = Txt(MX, 776, 'either way, a PIOP ends in claims:   “<m>f</m> has value <m>v</m> at a point”', {size: 28, anchor: 'middle'});
+const step10 = [h10, s10, g10l, ...g10, ...rd10.flatMap((r) => [r.h, r.g, r.r]), ...f10a, f10b, n10, cl10l, ...CL10, sw10, ew10];
+beat(2, 18, (t) => {
+  A.fadeOut(step9, t, 0.6);
+  A.fadeIn(h10, t + 0.6, 0.6, {dy: 8});
+  A.fadeIn(g10l, t + 2.0, 0.5); A.fadeIn(g10, t + 2.2, 0.4, {lag: 0.15});
+  A.write(s10, t + 3.6, 1.6);
+  rd10.forEach((r, k) => {
+    const tt = t + 9.2 + 2.6 * k;
+    A.fadeIn(r.h, tt, 0.4); A.fadeIn(r.g, tt + 0.2, 0.5, {dx: -12}); A.fadeIn(r.r, tt + 0.9, 0.5, {dx: 12});
+  });
+  A.fadeIn(f10a, t + 10.8, 0.5, {lag: 0.1, dx: -30});
+  A.fadeIn(f10b, t + 13.4, 0.5, {dx: -30}); A.fadeIn(n10, t + 13.8, 0.5);
+  A.fadeIn(cl10l, t + 14.4, 0.5); A.fadeIn(CL10, t + 14.7, 0.4, {lag: 0.25, dy: -10});
+  A.fadeIn(sw10, t + 15.6, 0.5);
+  A.fadeIn(ew10, t + 16.3, 0.6, {dy: 8});
+});
+
+/* 11. Why the prover must commit first: z first lets a prover cheat; commit, then z, then prove. */
+const l11a = Txt(430, 196, 'if the prover knew <m>z</m> first', {size: 24, fill: C.red});
+const zA11 = Token(500, 262, '<m>z</m>', C.yellow, {r: 28});
+const a11 = [Arrow(538, 262, 640, 262, C.dim), Arrow(1062, 262, 1150, 262, C.dim)];
+const b11 = Card(650, 224, 400, 76, C.red, {fo: 0.06, r: 12}); b11.t = CT(b11, 200, 47, 'invent polynomials', {size: 28, anchor: 'middle'});
+const p11 = [Check(1182, 262, C.green), Txt(1206, 272, 'passes at <m>z</m>', {size: 28})];
+const x11 = [Card(456, 208, 904, 108, C.red, {fo: 0.03, r: 16, sw: 2.5, dash: '10 8'}), Cross(1396, 262, C.red), Txt(1424, 272, 'a cheat', {size: 28, fill: C.red})];
+const l11b = Txt(430, 430, 'so: commit first', {size: 24, fill: C.green});
+const c11 = Card(440, 462, 330, 76, C.gold, {fo: 0.08, r: 12});
+const c11k = Lock(...at(c11, 40, 40), C.gold, {parent: c11}); c11k.base.o = 1;
+c11.t = CT(c11, 70, 48, 'commit <m>a</m>, <m>b</m>, <m>c</m>, <m>q</m>', {size: 28});
+const a11b = [Arrow(780, 500, 864, 500, C.dim), Arrow(946, 500, 1030, 500, C.dim)];
+const zB11 = Token(905, 500, '<m>z</m>', C.yellow, {r: 28});
+const d11 = Card(1040, 462, 420, 76, C.green, {fo: 0.08, r: 12}); d11.t = CT(d11, 210, 48, 'prove the values at <m>z</m> match', {size: 28, anchor: 'middle'});
+const j11 = Txt(1250, 600, 'the PCS’s job', {size: 30, fill: C.yellow, anchor: 'middle'});
+const step11 = [l11a, zA11, ...a11, b11, ...p11, ...x11, l11b, c11, ...a11b, zB11, d11, j11];
+beat(3, 15, (t) => {
+  A.fadeOut(step10, t, 0.6); mark(-1, t);
+  A.fadeIn(l11a, t + 1.2, 0.5);
+  A.fadeIn(zA11, t + 1.6, 0.4, {s0: 0.6}); A.draw(a11[0], t + 2.1, 0.5);
+  A.draw(b11, t + 2.5, 0.6); A.fadeIn(b11.t, t + 2.8, 0.4);
+  A.draw(a11[1], t + 3.6, 0.5); A.fadeIn(p11, t + 4.0, 0.5);
+  A.to([zA11, ...a11, b11, ...p11], t + 5.2, 0.6, {o: 0.4}); A.fadeIn(x11[0], t + 5.2, 0.6); A.draw(x11[1], t + 5.5, 0.4); A.fadeIn(x11[2], t + 5.7, 0.5);
+  A.fadeIn(l11b, t + 6.0, 0.5);
+  A.draw(c11, t + 6.4, 0.6); A.fadeIn(c11.t, t + 6.7, 0.4);
+  A.draw(a11b[0], t + 8.4, 0.5); A.fadeIn(zB11, t + 8.8, 0.4, {s0: 0.6});
+  A.draw(a11b[1], t + 10.0, 0.5); A.draw(d11, t + 10.4, 0.6); A.fadeIn(d11.t, t + 10.7, 0.4);
+  A.fadeIn(j11, t + 12.8, 0.6, {dy: 8}); circumC(1250, 500, 420, 76, C.yellow, t + 12.8, {hold: 1.5});
+  rsOn(2, t + 13.0); mark(2, t + 13.6);
+});
+
+/* 12. Committing: column a sits inside a 16-entry codeword (computed in GF(2^8)); a Merkle tree over it; root R. */
+const CX12 = (i) => 500 + 60 * i;
+const h12 = Txt(470, 150, 'Reed–Solomon codeword', {size: 30});
+const cw12 = CW_A.map((v, i) => Cell(CX12(i), 560, 56, 52, v, i < 4 ? C.blue : C.gold, {size: 22, fo: i < 4 ? 0.16 : 0.08}));
+const cw12l = [Txt(CX12(1.5), 622, 'column <m>a</m>', {size: 22, fill: C.blue, anchor: 'middle'}), Txt(CX12(9.5), 622, '12 more points:  4 × the rows,  rate 1/4', {size: 22, fill: C.gold, anchor: 'middle'})];
+const d12l = Txt(470, 690, 'change one table value  (row 1 of <m>a</m>: 1 → 0):   13 of the 16 entries change', {size: 22, fill: C.dim});
+const cw12b = CW_A2.map((v, i) => (v !== CW_A[i] ? Cell(CX12(i), 736, 56, 52, v, C.red, {size: 22, fo: 0.25}) : Cell(CX12(i), 736, 56, 52, v, C.faint, {size: 22, fo: 0.04, tc: C.dim})));
+const sc12 = Txt(MX, 822, 'so a few random spot checks will catch a change', {size: 26, anchor: 'middle'});
+const tree12 = (() => {
+  const lv = [DOM.map((_, i) => [CX12(i), 506])];
+  for (let k = 1; k <= 4; k++) lv.push(lv[k - 1].filter((_, i) => i % 2 === 0).map((p, i) => [(lv[k - 1][2 * i][0] + lv[k - 1][2 * i + 1][0]) / 2, 506 - 55 * k]));
+  const edges = new M(0, 0, null, 0), nodes = new M(0, 0, null, 0);
+  let d = DOM.map((_, i) => `M${CX12(i)},532 V${506}`).join(' ') + ' ';
+  for (let k = 1; k <= 4; k++) lv[k].forEach((p, i) => { const a = lv[k - 1][2 * i], b = lv[k - 1][2 * i + 1]; d += `M${a[0]},${a[1]} L${p[0]},${p[1]} L${b[0]},${b[1]} `; });
+  shape(edges, d, {stroke: C.faint, sw: 2});
+  lv.slice(1).flat().forEach((p) => shape(nodes, circ(p[0], p[1], 6), {stroke: C.gold, sw: 2, fill: C.stage, fo: 1, draw: false}));
+  return {edges, nodes, root: lv[4][0]};
+})();
+const tl12 = Txt(1290, 336, 'Merkle tree', {size: 24, fill: C.dim});
+const R12 = MChip(tree12.root[0], 214, '<m>R</m>  ·  32 bytes', C.gold, {w: 220, size: 26, tc: C.ink});
+const R12e = Line(tree12.root[0], 232, tree12.root[0], tree12.root[1] - 6, C.gold, {sw: 2});
+const R12l = Txt(tree12.root[0] + 130, 222, 'only this is sent', {size: 24, fill: C.gold});
+const step12 = [h12, ...cw12, ...cw12l, d12l, ...cw12b, sc12, tree12.edges, tree12.nodes, tl12, R12, R12e, R12l];
+beat(3, 19, (t) => {
+  A.fadeOut(step11, t, 0.6);
+  A.fadeIn(h12, t + 0.6, 0.6);
+  A.fadeIn(cw12.slice(0, 4), t + 1.2, 0.4, {lag: 0.12}); A.fadeIn(cw12l[0], t + 1.8, 0.5);
+  A.fadeIn(cw12.slice(4), t + 3.2, 0.35, {lag: 0.06}); A.fadeIn(cw12l[1], t + 4.2, 0.5);
+  A.fadeIn(d12l, t + 7.6, 0.5); A.fadeIn(cw12b, t + 8.2, 0.35, {lag: 0.04});
+  A.fadeIn(sc12, t + 11.2, 0.6, {dy: 8});
+  A.draw(tree12.edges, t + 13.6, 1.2); A.fadeIn(tree12.nodes, t + 14.0, 0.6); A.fadeIn(tl12, t + 14.2, 0.5);
+  A.draw(R12e, t + 15.6, 0.3); A.fadeIn(R12, t + 15.8, 0.5, {s0: 0.6}); A.fadeIn(R12l, t + 16.6, 0.5);
+});
+
+/* 13. Fiat–Shamir: z is a hash of the statement and everything sent, R included; recommitting does not help. */
+const nv13 = Txt(MX, 150, 'no verifier online:  the random point is a hash', {size: 28, fill: C.dim, anchor: 'middle'});
+const in13 = [MChip(560, 290, 'the statement', C.ink, {w: 220, size: 26}), MChip(560, 384, 'everything sent:  <m>R</m>, …', C.gold, {w: 280, size: 26, tc: C.ink})];
+const hb13 = Card(800, 282, 240, 110, C.blue, {fo: 0.08}); hb13.t = CT(hb13, 120, 67, 'hash', {size: 36, anchor: 'middle'});
+const ar13 = [Arrow(672, 292, 794, 318, C.dim), Arrow(702, 382, 794, 356, C.dim), Arrow(1046, 337, 1150, 337, C.dim)];
+const z13 = Token(1192, 337, '<m>z</m>', C.yellow, {r: 32});
+const z13l = Txt(1240, 347, 'fixed only after <m>R</m>', {size: 26, fill: C.yellow});
+const rl13 = Txt(470, 512, 'to steer <m>z</m>, the prover must recommit:', {size: 24, fill: C.dim});
+const rr13 = [MChip(560, 586, 'a new root  <m>R</m><sub>2</sub>', C.gold, {w: 200, size: 26, tc: C.ink}), MChip(920, 586, 'hash', C.blue, {w: 120, size: 28, tc: C.ink}), Token(1192, 586, '<m>z</m><sub>2</sub>', C.yellow, {r: 30})];
+const ar13b = [Arrow(664, 586, 854, 586, C.dim), Arrow(984, 586, 1154, 586, C.dim)];
+const x13 = [Cross(1256, 586, C.red), Txt(1286, 596, 'fails again', {size: 26, fill: C.red})];
+const am13 = Txt(MX, 700, 'each new try still almost surely fails', {size: 28, anchor: 'middle'});
+const step13 = [nv13, ...in13, hb13, ...ar13, z13, z13l, rl13, ...rr13, ...ar13b, ...x13, am13];
+beat(3, 15, (t) => {
+  A.fadeOut(step12, t, 0.6);
+  A.fadeIn(nv13, t + 0.6, 0.6, {dy: 8});
+  A.draw(hb13, t + 2.2, 0.7); A.fadeIn(hb13.t, t + 2.5, 0.4);
+  A.fadeIn(in13[0], t + 3.4, 0.5, {dx: -12}); A.draw(ar13[0], t + 3.7, 0.5);
+  A.fadeIn(in13[1], t + 5.4, 0.5, {dx: -12}); A.draw(ar13[1], t + 5.7, 0.5);
+  A.draw(ar13[2], t + 7.2, 0.5); A.fadeIn(z13, t + 7.6, 0.4, {s0: 0.6}); A.fadeIn(z13l, t + 8.4, 0.5);
+  A.fadeIn(rl13, t + 9.6, 0.5);
+  A.fadeIn(rr13[0], t + 10.2, 0.4); A.draw(ar13b[0], t + 10.6, 0.4); A.fadeIn(rr13[1], t + 11.0, 0.4);
+  A.draw(ar13b[1], t + 11.4, 0.4); A.fadeIn(rr13[2], t + 11.8, 0.4, {s0: 0.6});
+  A.draw(x13[0], t + 12.5, 0.4); A.fadeIn(x13[1], t + 12.7, 0.4);
+  A.fadeIn(am13, t + 13.2, 0.6, {dy: 8});
+});
+
+/* 14. The opening proof: z is off the codeword; the quotient's entries come from f's; folds with their own roots; spot checks. */
+const CX14 = (i) => 498 + 56 * i;
+const fl14 = Txt(470, 182, 'codeword of <m>f</m>:  its positions', {size: 24, fill: C.dim});
+const f14 = CW_A.map((v, i) => Cell(CX14(i), 224, 52, 46, v, C.blue, {size: 20}));
+const R14 = MChip(1418, 224, '<m>R</m>', C.gold, {w: 56, size: 26, tc: C.ink});
+const z14 = [Token(1500, 112, '<m>z</m>', C.yellow, {r: 28}), Txt(1458, 120, '<m>z</m>:  one point, anywhere in the big field', {size: 24, fill: C.yellow, anchor: 'end'})];
+const nm14 = Txt(1458, 156, 'no Merkle path shows <m>f</m>(<m>z</m>)', {size: 24, fill: C.red, anchor: 'end'});
+const q14a = Txt(470, 304, '(<m>f</m>(<m>x</m>) − <m>v</m>) / (<m>x</m> − <m>z</m>)', {size: 28});
+const q14b = Txt(760, 304, 'is low degree only if  <m>f</m>(<m>z</m>) = <m>v</m>', {size: 26, fill: C.dim});
+const qs14 = QW.map((v, i) => Cell(CX14(i), 352, 52, 46, v, C.blueL, {size: 20, fo: 0.06}));
+const qa14 = [12, 13, 15].map((i) => Arrow(CX14(i), 250, CX14(i), 326, C.blueL, {sw: 2, head: 9}));
+const ql14 = [Txt(1392, 346, 'computed from <m>f</m>,', {size: 21, fill: C.dim}), Txt(1392, 372, 'never committed', {size: 21, fill: C.dim})];
+const fo14 = [[8, 450], [4, 546]].map(([n, y], k) => ({
+  cells: [...Array(n)].map((_, i) => Cell(CX14(i), y, 52, 46, '', C.blueL, {fo: 0.06})),
+  root: MChip(CX14(n) - 2, y, `<m>R</m><sub>${k + 1}</sub>`, C.gold, {w: 58, size: 24, tc: C.ink}),
+  ar: Arrow(445, y - 74, 445, y - 26, C.dim, {head: 10}),
+  lb: Txt(430, y - 42, 'fold', {size: 22, fill: C.dim, anchor: 'end'}),
+}));
+const fl14b = Txt(CX14(8) + 40, 458, 'each fold has its own root', {size: 22, fill: C.dim});
+const SP14 = [[224, [3, 9, 14]], [352, [3, 9, 14]], [450, [1, 6]], [546, [2]]].flatMap(([y, ps]) => ps.map((i) => Card(CX14(i) - 30, y - 27, 60, 54, C.yellow, {fo: 0.12, r: 8, sw: 3})));
+const b14a = Txt(MX, 654, 'spot checks:  about 100 random positions, each with its Merkle path', {size: 26, anchor: 'middle'});
+const b14b = Txt(MX, 724, '≈ 150 KB per opening proof  (est.)', {size: 30, fill: C.gold, anchor: 'middle'});
+const step14 = [fl14, ...f14, R14, ...z14, nm14, q14a, q14b, ...qs14, ...qa14, ...ql14, ...fo14.flatMap((f) => [...f.cells, f.root, f.ar, f.lb]), fl14b, ...SP14, b14a, b14b];
+beat(3, 21, (t) => {
+  A.fadeOut(step13, t, 0.6);
+  A.fadeIn(fl14, t + 0.5, 0.5); A.fadeIn(f14, t + 0.8, 0.3, {lag: 0.03}); A.fadeIn(R14, t + 1.4, 0.4);
+  A.fadeIn(z14[0], t + 2.4, 0.4, {s0: 0.6}); A.fadeIn(z14[1], t + 2.8, 0.5);
+  A.fadeIn(nm14, t + 4.0, 0.5);
+  A.write(q14a, t + 6.0, 1.2); A.fadeIn(q14b, t + 9.4, 0.6);
+  A.draw(qa14, t + 13.2, 0.5, {lag: 0.1}); A.fadeIn(qs14, t + 13.4, 0.3, {lag: 0.03}); A.fadeIn(ql14, t + 14.0, 0.5);
+  fo14.forEach((f, k) => {
+    const tt = t + 15.2 + 1.0 * k;
+    A.draw(f.ar, tt, 0.4); A.fadeIn(f.lb, tt, 0.4); A.fadeIn(f.cells, tt + 0.3, 0.3, {lag: 0.04}); A.fadeIn(f.root, tt + 0.6, 0.4);
+  });
+  A.fadeIn(fl14b, t + 15.6, 0.5);
+  A.fadeIn(SP14, t + 17.6, 0.3, {lag: 0.08});
+  A.fadeIn(b14a, t + 18.2, 0.6, {dy: 8});
+  A.fadeIn(b14b, t + 19.2, 0.6, {dy: 8});
+});
+
+/* 15. The circuit is polynomials too: row 4 now checks a + b = c; a fixed selector column s says which check runs where. */
+const V15 = [[1, 1, 1, 1], [1, 1, 0, 0], [1, 0, 1, 0], [0, 1, 1, 1]];
+const T15 = Table(560, 236, {cols: ['s', 'a', 'b', 'c'], vals: V15, cw: 80, ch: 60});     // x 560..880, y 236..476
+const b15 = Cell(T15.x(2), T15.y(3), 74, 54, 0, C.grey, {size: 28});
+const ck15 = TOY.map((r, i) => Txt(930, T15.y(i) + 10, `${r[0]} × ${r[1]} = ${r[2]}`, {size: 30}));
+const ck15b = Txt(930, T15.y(3) + 10, '1 <k=green>+</k> 0 = 1', {size: 30});
+const sx15 = Txt(1110, T15.y(3) + 10, 'a different check', {size: 24, fill: C.green});
+const sl15 = Txt(T15.x(0), 520, '<m>s</m>:  which check runs where', {size: 24, fill: C.green, anchor: 'middle'});
+const id15 = Txt(MX, 600, '<m>s</m>·(<m>a</m>·<m>b</m> − <m>c</m>)  +  (1 − <m>s</m>)·(<m>a</m> + <m>b</m> − <m>c</m>)   =   <m>Z</m>·<m>q</m>', {size: 34, anchor: 'middle'});
+const fx15 = [Lock(500, 676, C.green), Txt(530, 686, '<m>s</m> is fixed:  the same for every proof,  committed once', {size: 26, fill: C.green})];
+const CL15 = ['a', 'b', 'c', 'q'].map((n, i) => MChip(560 + 160 * i, 770, `<m>${n}</m>(<m>z</m>) = <m>v</m><sub>${n}</sub>`, COLC[n], {w: 144, size: 22, tc: C.dim, fo: 0.06}));
+const cls15 = MChip(1312, 770, '<m>s</m>  has value  <m>v</m><sub>s</sub>  at  <m>z</m>', C.green, {w: 300, size: 24, tc: C.ink, fo: 0.18});
+const cll15 = Txt(470, 778, 'claims', {size: 22, fill: C.dim, anchor: 'end'});
+const step15 = [...T15.all(), b15, ...ck15, ck15b, sx15, sl15, id15, ...fx15, ...CL15, cls15, cll15];
+beat(3, 17, (t) => {
+  A.fadeOut(step14, t, 0.6); mark(0, t + 0.6);
+  A.fadeIn([...T15.hdr.slice(1), ...T15.rl], t + 0.6, 0.5);
+  T15.cells.forEach((r, i) => A.fadeIn(r.slice(1), t + 0.8 + 0.12 * i, 0.4, {lag: 0.04}));
+  A.fadeIn(ck15, t + 1.2, 0.4, {lag: 0.1});
+  A.handoff(T15.cells[3][2], b15, t + 3.0, 0.4); A.pulse(b15, t + 3.0, 0.6, 1.2);
+  A.handoff(ck15[3], ck15b, t + 3.4, 0.4); A.fadeIn(sx15, t + 3.8, 0.5);
+  A.fadeIn(T15.hdr[0], t + 5.4, 0.4); A.fadeIn(T15.cells.map((r) => r[0]), t + 5.6, 0.4, {lag: 0.15});
+  A.fadeIn(sl15, t + 6.6, 0.5);
+  A.write(id15, t + 8.0, 1.6);
+  A.fadeIn(fx15, t + 10.2, 0.6, {dx: -10});
+  A.fadeIn(cll15, t + 12.4, 0.4); A.fadeIn(CL15, t + 12.6, 0.4, {lag: 0.15});
+  A.fadeIn(cls15, t + 13.8, 0.5, {dx: -12}); circumC(1312, 770, 300, 39, C.yellow, t + 14.2, {hold: 2});
+});
+
+/* 16. Privacy must cover both layers. */
+const zkH = Txt(MX, 155, 'Zero knowledge is extra work', {size: 42, anchor: 'middle'});
+const zkRaw = [MChip(590, 310, 'secret polynomial  f', C.red, {w: 340, bg: true}),
+  Txt(840, 320, '+', {size: 42, anchor: 'middle'}),
+  MChip(1140, 310, 'fresh random masking', C.blue, {w: 450, bg: true})];
+const zkArrow = Arrow(MX, 365, MX, 440, C.dim);
+const zkMask = MChip(MX, 490, 'masked polynomial: same rules, hidden secrets', C.green, {w: 970, bg: true});
+const zkOut = [MChip(655, 615, 'values at z look random', C.teal, {w: 440, bg: true}),
+  MChip(1210, 615, 'opened cells + salted leaves', C.teal, {w: 490, bg: true})];
+const zkWarn = Txt(MX, 750, 'Both lanes still need a complete hiding proof system.', {size: 29, fill: C.yellow, anchor: 'middle'});
+const zkAll = [zkH, ...zkRaw, zkArrow, zkMask, ...zkOut, zkWarn];
+beat(3, 16, (t) => {
+  A.fadeOut(step15, t, 0.6); mark(-1, t);
+  A.fadeIn(zkH, t + 0.8, 0.6);
+  A.fadeIn(zkRaw, t + 2, 0.6, {lag: 0.7});
+  A.draw(zkArrow, t + 5, 0.7); A.fadeIn(zkMask, t + 6, 0.7);
+  A.fadeIn(zkOut, t + 8, 0.6, {lag: 1}); A.fadeIn(zkWarn, t + 12, 0.6);
+});
+
+/* 17. Follow the interfaces, not just four names. */
+const seamH = Txt(800, 120, 'How the layers connect', {size: 44, anchor: 'middle'});
+const seamDefs = [
+  ['circuit', 'rules as data: fixed tables + public inputs', C.green],
+  ['PIOP', 'rules → identities → values claimed at random points', C.blue],
+  ['PCS', 'commit first → prove those values really match', C.purple],
+  ['field', 'the arithmetic used by every layer', C.dim],
+];
+const seamRows = seamDefs.map(([n,g,c],i)=>{
+  const box=Card(170, 190+i*140, 930, 100, c, {fo:0.07});
+  return [box, Txt(200, 230+i*140,n,{size:32,fill:c}), Txt(200,268+i*140,g,{size:26})];
+});
+const seamLabels = [Txt(1140, 310, 'circuit interface', {size:28,fill:C.orange}),
+  Txt(1140, 450, 'opening-claim interface', {size:26,fill:C.purple})];
+const seamLines = [Line(150,310,1520,310,C.orange,{sw:3,dash:'12 9'}),
+  Line(150,450,1520,450,C.purple,{sw:3,dash:'12 9'})];
+const seamFoot=Txt(800,805,'A STARK combines these checks using hashes; no elliptic curves.',{size:27,fill:C.dim,anchor:'middle'});
+const seamAll=[seamH,...seamRows.flat(),...seamLabels,...seamLines,seamFoot];
+beat(4,19,(t)=>{
+  A.fadeOut([...zkAll,rsHead,...rsBox,...rsSlot],t,0.6);
+  A.fadeIn(seamH,t+0.8,0.6);
+  seamRows.forEach((r,i)=>A.fadeIn(r,t+2+i*2,0.6,{lag:0.15}));
+  A.fadeIn(seamLines[0],t+10,0.6); A.fadeIn(seamLabels[0],t+10.5,0.6);
+  A.fadeIn(seamLines[1],t+13,0.6); A.fadeIn(seamLabels[1],t+13.5,0.6);
+  A.fadeIn(seamFoot,t+16,0.6);
+});
+
+/* 18–20. Keep the same stack on both sides; move responsibility. */
+const SL = Stack(LX, 1, {head: '<c>PCS_open</c>', col: C.purple, preCut: true});
+const SR = Stack(RX, 0, {head: 'circuit claims', col: C.orange, preCut: true});
+const tagL = Txt(LX + LW / 2 - 26, layerY(1, 1) - 6, 'run as code', {size: 22, fill: C.green, anchor: 'end'});
+const tagR1 = Txt(RX + LW / 2 - 26, layerY(1, 0) - 6, 'fixed format', {size: 22, fill: C.dim, anchor: 'end'});
+const tagR0 = Txt(RX + LW / 2 - 26, layerY(0, 0) - 6, 'data, not code', {size: 22, fill: C.green, anchor: 'end'});
+const cutKey=Txt(800,800,'Green: chosen by the app  ·  Grey: provided by Ethereum',{size:28,fill:C.dim,anchor:'middle'});
+const claimLeft=MChip(LX,810,'claim: C has value c at z',C.purple,{w:570,bg:true});
+const claimRight=MChip(RX,810,'circuit hash → one whole proof',C.orange,{w:570,bg:true});
+beat(4,16,(t)=>{
+  A.fadeOut(seamAll,t,0.6);
+  [SL,SR].forEach((S,j)=>{
+    A.fadeIn(S.head,t+1+j,0.6);
+    S.layers.forEach((L,i)=>{
+      A.draw(L.bN,t+2+i*0.6,0.6);
+      A.fadeIn([L.name,L.gloss],t+2.3+i*0.6,0.5);
+    });
+    A.fadeIn(S.line,t+6+j*2,0.7);
+    A.fadeIn([S.lApp,S.lEth],t+9+j*1.5,0.6);
+  });
+  A.fadeIn(cutKey,t+13,0.6);
+});
+beat(4,19,(t)=>{
+  A.fadeOut(cutKey,t,0.5);
+  tint({...SL,layers:SL.layers.slice(0,2)},t+1);
+  A.fadeIn(tagL,t+3,0.6);
+  tint({...SL,layers:SL.layers.slice(2),cut:-1},t+8);
+  A.fadeIn(claimLeft,t+12,0.6);
+  circumC(LX,SL.lineY,600,55,C.purple,t+14,{hold:3});
+});
+beat(4,19,(t)=>{
+  tint({...SR,layers:SR.layers.slice(0,1)},t+1);
+  A.fadeIn(tagR0,t+3,0.6);
+  tint({...SR,layers:SR.layers.slice(1),cut:-1},t+6);
+  A.fadeIn(tagR1,t+8,0.6);
+  A.fadeIn(claimRight,t+12,0.6);
+  circumC(RX,SR.lineY,600,55,C.orange,t+14,{hold:3});
+});
+
+/* 21 (short step 5). What the contract holds: from here on the stacks stay small at the top. */
 const CW = 660;
 function sideCard(cx, y, h, title, col) {
   const c = Card(cx - CW / 2, y, CW, h, col, {fo: 0.06});
@@ -703,8 +1275,8 @@ const kLs = Txt(LX, 700, 'checks the PIOP, records the rest as claims', {size: 2
 const kR = sideCard(RX, 400, 250, 'pool contract', C.orange);
 const kRr = rows(kR, ['<c>circuit_id</c>  (32 bytes)', 'three equality checks', 'no proof code'], 108, 50);
 const kRs = Txt(RX, 700, 'checks the claim names it and this transfer', {size: 24, fill: C.dim, anchor: 'middle'});
-beat(2, 15, (t) => {
-  A.fadeOut([...SL.fine(), ...SR.fine(), tagL, tagR0, tagR1], t, 0.6);
+beat(5, 15, (t) => {
+  A.fadeOut([...SL.fine(), ...SR.fine(), tagL, tagR0, tagR1, claimLeft, claimRight], t, 0.6);
   shift([...SL.layers, ...SR.layers].map((L) => L.name), t + 0.1, 0.4, 0, 20);   // names to the middle of their boxes
   shrink(SL, t + 0.5, 1.3); shrink(SR, t + 0.5, 1.3);
   A.draw(kL, t + 2.2, 0.9); A.fadeIn(kL.t, t + 2.6, 0.5);
@@ -717,7 +1289,7 @@ beat(2, 15, (t) => {
   A.fadeIn(kRs, t + 12.0, 0.6);
 });
 
-/* 6. What travels where: wallet -> on chain / off chain -> one block STARK. */
+/* 22 (short step 6). What travels where: wallet -> on chain / off chain -> one block STARK. */
 const PY = {on: 470, off: 620};
 function pipe(cx, col, onLbl, offLbl) {
   const P = {};
@@ -737,7 +1309,7 @@ const bst = Badge(800, 790, {k: 1.35});
 const bstT = Txt(800, 858, 'one STARK per block', {size: 22, fill: C.dim, anchor: 'middle'});
 const mL = Arrow(LX + 200, PY.off + 26, 712, 776, C.gold, {bend: 30});
 const mR = Arrow(RX + 20, PY.off + 26, 888, 776, C.gold, {bend: -30});
-beat(2, 17, (t) => {
+beat(5, 17, (t) => {
   A.fadeOut([kL, kR, kLs, kRs], t, 0.6);
   for (const [P, t1, t2] of [[pL, 1.0, 3.6], [pR, 6.6, 9.2]]) {
     A.draw(P.wal, t + t1, 0.7); A.fadeIn(P.walT, t + t1 + 0.3, 0.4);
@@ -749,7 +1321,7 @@ beat(2, 17, (t) => {
   A.fadeIn(bst, t + 13.2, 0.5, {s0: 0.5}); A.fadeIn(bstT, t + 13.6, 0.5);
 });
 
-/* 7. Gas: two bars on one scale (4 px per 1,000 gas). */
+/* 23 (short step 7). Gas: two bars on one scale (4 px per 1,000 gas). */
 const GK = 4, GY = 540, GH = 54;
 function gasBar(cx, from, to, col, head, lines) {
   const x0 = cx - 320, G = {};
@@ -764,7 +1336,7 @@ function gasBar(cx, from, to, col, head, lines) {
 }
 const gL = gasBar(LX, 108, 128, C.purple, '≈ 108,000–128,000 gas  <k=dim>est.</k>', ['running its PIOP in the EVM', '+ about 20,000 gas per claim']);
 const gR = gasBar(RX, 30, 30, C.orange, '≈ 30,000 gas  <k=dim>est.</k>', ['EIP-8288’s draft price', 'per circuit claim']);
-beat(2, 14, (t) => {
+beat(5, 14, (t) => {
   A.fadeOut([pL, pR].flatMap((P) => Object.values(P)), t, 0.6);
   A.fadeOut([bst, bstT, mL, mR], t, 0.6);
   A.fadeIn([gL.track, gR.track], t + 0.8, 0.6);
@@ -774,7 +1346,7 @@ beat(2, 14, (t) => {
   A.fadeIn(gR.lines, t + 10.8, 0.6, {lag: 0.5});
 });
 
-/* 8. Freedom or shared safety: one plus and one minus under each stack. */
+/* 24 (short step 8). Freedom or shared safety: one plus and one minus under each stack. */
 function pm(card, ly, sign, s) {
   const r = new M(...at(card, 30, ly), card, 0);
   rich(r.inner, 12, 0, sign, {size: 40, fill: sign === '+' ? C.green : C.red, anchor: 'middle'});
@@ -788,7 +1360,7 @@ const fR = sideCard(RX, 400, 270, 'shared safety', C.orange);
 const fRp = pm(fR, 116, '+', 'one verifier, fixable by fork');
 const fRm = pm(fR, 186, '−', 'one format for every app');
 const fBoth = Txt(800, 752, 'in both:  a bug in the circuit itself stays', {size: 26, anchor: 'middle'});
-beat(2, 19, (t) => {
+beat(5, 19, (t) => {
   A.fadeOut([gL, gR].flatMap((G) => [G.track, G.bar, G.head, ...G.lines]), t, 0.6);
   A.draw(fL, t + 0.8, 0.9); A.fadeIn(fL.t, t + 1.2, 0.5);
   A.fadeIn(fLp, t + 1.8, 0.6, {dx: -10});
@@ -799,7 +1371,7 @@ beat(2, 19, (t) => {
   A.fadeIn(fBoth, t + 15.8, 0.7, {dy: 8});
 });
 
-/* 9. A better PCS: a fork badge between the stacks; neither pool's code changes. */
+/* 25 (short step 9). A better PCS: a fork badge between the stacks; neither pool's code changes. */
 const fork = Card(800 - 170, 186 - 32, 340, 64, C.yellow, {fo: 0.08, r: 32, sw: 2.5});
 const forkI = IconFork(...at(fork, 40, 34), C.yellow, 0.6); fork.inner.appendChild(forkI.g);
 forkI.base.o = 1;
@@ -815,7 +1387,7 @@ function okCard(cx, col) {
   return c;
 }
 const okL = okCard(LX, C.purple), okR = okCard(RX, C.orange);
-beat(3, 18, (t) => {
+beat(5, 18, (t) => {
   A.fadeOut([fL, fR, fBoth], t, 0.6);
   A.draw(fork, t + 0.6, 0.8); A.fadeIn(forkT, t + 1.0, 0.5);
   layerBox(SL, 2, C.yellow, t + 1.4); layerBox(SR, 2, C.yellow, t + 1.4);
@@ -826,7 +1398,7 @@ beat(3, 18, (t) => {
   A.fadeIn(vR2, t + 15.0, 0.6, {dx: -10});
 });
 
-/* 10. Frozen for good: two lists with locks; the shared row aligned on both sides. */
+/* 26 (short step 10). Frozen for good: two lists with locks; the shared row aligned on both sides. */
 const ZY = {h1: 400, a: 452, b: 506, c: 560, h2: 634, d: 686, e: 740};
 function frozen(cx, key, s, o = {}) {
   const r = new M(cx - 300, ZY[key], null, 0);
@@ -840,7 +1412,7 @@ const zR = [frozen(RX, 'a', 'the constraint format'), frozen(RX, 'b', 'its field
 const zC = [frozen(LX, 'd', 'its circuit', {col: C.green}), frozen(RX, 'd', 'its circuit', {col: C.green})];
 const zP = frozen(LX, 'e', 'and its PIOP', {col: C.green});
 const zPh = Card(LX - 316, ZY.e - 26, 260, 46, C.yellow, {fo: 0.1, r: 10, sw: 2.5});
-beat(3, 15, (t) => {
+beat(5, 15, (t) => {
   A.fadeOut([fork, forkT, okL, okR, ...vL1, ...vL2, ...vR1, ...vR2], t, 0.6);
   A.fadeIn(zH.filter((_, i) => i % 2 === 0), t + 1.0, 0.5);
   A.fadeIn(zL, t + 1.6, 0.5, {lag: 0.7, dx: -10});
@@ -852,7 +1424,7 @@ beat(3, 15, (t) => {
   A.fadeIn(zC[1], t + 10.8, 0.5, {dx: -10});
 });
 
-/* 11. In one line: the stacks once more, then a 4-row summary. */
+/* 27 (short step 11). In one line: the stacks once more, then a 4-row summary. */
 const SUM = [
   ['the PIOP lives in', 'each app', 'Ethereum'],
   ['in the contract', 'PIOP verifier + circuit commitment', 'a 32-byte circuit id'],
@@ -867,7 +1439,7 @@ const sumRows = SUM.map(([k, a, b], i) => [
 ]);
 const sumRules = [0, 1, 2, 3, 4].map((i) => Line(110, SUMY(i) - 42, 1490, SUMY(i) - 42, C.rule, {sw: 1.5}));
 const both = Txt(800, 760, 'both:  private  ·  post-quantum  ·  can share one aggregate  ·  not built yet', {size: 28, anchor: 'middle'});
-beat(4, 16, (t) => {
+beat(6, 16, (t) => {
   A.fadeOut([...zH, ...zL, ...zR, ...zC, zP, zPh], t, 0.6);
   appBox(SL, t + 0.8, {hold: 3}); appBox(SR, t + 0.8, {hold: 3});
   A.fadeIn(sumRules, t + 1.8, 0.6, {lag: 0.08});
@@ -875,7 +1447,7 @@ beat(4, 16, (t) => {
   A.fadeIn(both, t + 11.8, 0.8, {dy: 10});
 });
 
-const CHAPTERS = [['Layers', 1], ['Consequences', 2], ['Upgrades', 3], ['Summary', 4]];
+const CHAPTERS = [['Layers', 1], ['PIOP', 2], ['PCS', 3], ['Where each design cuts', 4], ['Consequences', 5], ['Summary', 6]];
 
 /* ---------------- rendering ---------------- */
 function render(t) {

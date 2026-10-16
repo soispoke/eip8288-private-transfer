@@ -16,6 +16,6 @@ A third animation, *How circuit claims work*, follows the same transfer when the
 
 ## PCS_open vs circuit claims
 
-A short comparison, *PCS_open vs circuit claims* (about 3 minutes), explains the one difference between the two designs, where the line falls between what each app brings and what Ethereum provides, and what follows from it. Open it at **https://soispoke.github.io/eip8288-private-transfer/compare/**.
+A detailed comparison, *PCS_open vs circuit claims* (about 7½ minutes), first builds a small STARK layer by layer—field, circuit, PIOP, polynomial commitments, Fiat–Shamir and openings—then shows exactly where the two designs cut the stack and what follows from that choice. Open it at **https://soispoke.github.io/eip8288-private-transfer/compare/**.
 
 `index.html`, `pcs-open/index.html`, `circuit-claims/index.html` and `compare/index.html` are single self-contained files. Their fonts are KaTeX's Computer Modern fonts, from [KaTeX](https://github.com/KaTeX/KaTeX) (MIT License).
