@@ -532,10 +532,12 @@ const CAP = [
   "Now draw the boundary. With PCS_open, the app supplies its rules and its own PIOP checker; Ethereum provides the PCS check. With circuit claims, the app supplies just its rules in a common circuit format, and Ethereum provides both checks. The rules still belong to the app.",
   "Follow PCS_open. The contract runs the app’s PIOP checker, then records claims about the sealed data. Nodes check separate opening proofs to confirm those claims. They reconstruct the claims by running the contract; the claims themselves are not sent. A block is valid only if both checks pass.",
   "With circuit claims, the contract names the circuit and this transfer. The wallet supplies one complete proof. Nodes check both parts using Ethereum’s shared verifier, without running the contract first. The contract checks that the transaction names the correct circuit and transfer.",
-  "That boundary also decides what travels where. PCS_open puts the small PIOP proof on chain; its opening proofs stay off chain. Circuit claims put a small claim on chain; the whole proof stays off chain. Both can combine the off-chain proofs into one block proof.",
-  "So the tradeoff follows directly. PCS_open lets apps choose their own PIOP, but runs that code in the EVM and freezes it in immutable contracts. Circuit claims use one shared checker that forks can update, but require one common circuit format. The current gas estimates favour circuit claims.",
-  "Upgrades follow the same boundary. PCS_open stores a circuit commitment, so a new PCS needs a checked replacement for that old commitment. Circuit claims name the circuit’s rules, so Ethereum can rebuild the commitment from those rules. Those rules must stay available. Neither approach fixes a bug in an immutable app’s circuit.",
-  "The key choice is where the PIOP lives. PCS_open: a custom rule-checker in each app’s contract, plus Ethereum’s shared PCS. Circuit claims: the app supplies rules, and Ethereum checks the whole proof. More app-level freedom, or more shared proof machinery."
+  "Circuit claims need the circuit to remain available, but not necessarily in contract storage. The contract can hold just its hash. If a new backend needs a different circuit commitment, someone must rebuild it from the full rules. A hash alone cannot do that. Publication and long-term retrieval need a real design.",
+  "Recursive R1CS can mean huge, mostly empty matrices. Sparse methods avoid storing every zero, but the remaining description can still be large. Repeated tables connected by a bus, or a compact circuit generator, can help. The price is a richer fixed format, or work to expand and prepare circuits after backend changes.",
+  "A shared PIOP can be safer: apps stop shipping their own cryptographic checker. The cost is committing Ethereum to a constraint format and field, plus circuit availability and preparation. PCS_open leaves that format to apps, but freezes their PIOP code. The choice is where to carry the complexity.",
+  "PCS_open also needs the public circuit data to produce proofs and replacement commitments. Its proposed upgrade checks a new commitment against the old one, so every client need not rebuild it. That relies on migrating while the old PCS is sound. Circuit claims can instead rebuild from the actual rules.",
+  "An ISA lane can be added beside either option. For circuit claims, Ethereum can prove the old circuit relation on the new machine. For PCS_open, it can prove the opening checker while contracts keep running their PIOPs. Both need compatibility rules and cost checks. Old contracts do not automatically become ISA apps.",
+  "The tradeoff: PCS_open gives apps more control and leaves them more cryptographic responsibility. Circuit claims centralize that responsibility, but must solve large-circuit availability and fix a format. Adding an ISA later keeps old promises; it does not erase them."
 ];
 const NOTE = [
   "Both are proposals for private transfers, with zero-knowledge work still needed. The animation compares their intended interfaces, not finished implementations.",
@@ -543,10 +545,12 @@ const NOTE = [
   "PIOP: polynomial interactive oracle proof. PCS: polynomial commitment scheme. A circuit is the app’s rules represented as data. A circuit-claim lane would fix a format such as R1CS or CCS, as well as a field family; the exact choice remains open.",
   "PCS_open runs inside validation. Nodes must execute that prefix to derive the claims before checking opening proofs. The claim list is neither carried as transaction data nor written to the block. The app also retains ordinary transaction and state checks.",
   "The circuit claim is carried as an EIP-8288 dependency. A circuit id names the constraints; the statement binds this transfer. Proof checking can precede frame execution, but ordinary transaction validation still runs. The precise circuit-claim encoding remains a proposal.",
-  "The PCS_open on-chain PIOP proof also includes commitments and claimed values. A circuit claim is illustrated as 96 bytes in the companion design. Large off-chain proofs are merged recursively; they are not all included in the block.",
-  "For one modelled Keccak withdrawal, the earlier harness estimates 108–128k gas for PCS_open, including claim charges. The circuit-claim illustration uses a draft ~30k dependency price. Final pricing, header shares, fixed-claim charges and the format are unresolved. A shared verifier can be updated by fork, but that also concentrates its risks across apps.",
-  "The proposed PCS_open upgrade uses an add-only registry of equivalent commitments. It upgrades commitments, not immutable app PIOP code. Circuit claims can recompute commitments from available circuit descriptions, or carry those descriptions with proofs. Circuit availability and migration details remain open; each lane also freezes an arithmetic interface.",
-  "Neither proposal is fully built. Immutable app circuits remain fixed in both. PCS_open also freezes each app’s PIOP code; circuit claims instead fix a protocol-level constraint interface. Both can share EIP-8288’s aggregation machinery."
+  "Availability is of public constraints, not private witnesses. Expanded matrices can live off chain if they are reliably retrievable and authenticated by the circuit id; permanent on-chain state is not logically required. A temporary blob is not by itself a permanent archive. A canonical compact description or deterministic generator may replace publishing expanded matrices, but its exact semantics, identity, bounds and availability then become part of the interface. Re-preparation is needed when the backend changes the circuit preprocessing/commitment representation, not necessarily after every PIOP update. It can be cached per circuit per backend rather than repeated per transfer. The registry, archive and preparation-proof mechanism are unspecified.",
+  "The large recursive-circuit example has matrices of order 2^28 by 2^28. That is 2^56 logical entries per matrix, not a requirement to transmit a dense matrix. Sparse costs track nonzero entries and their indices, which can still be substantial. Spark-style techniques add proof machinery; they do not provide data availability. SIMD-R1CS with a bus makes repetition explicit, but freezes richer table, repetition and connection semantics. A generator makes the published description small; expansion, preparation and identity correctness still need to be paid for and verified. Complexity moves toward that of zkVM internals. No new size or timing benchmark was performed here.",
+  "A single shared verifier can receive protocol-wide audits and fork fixes, but also concentrates its blast radius. The circuit itself remains the app’s responsibility in both designs. Circuit claims fix a constraint format and field family; changing the internal proving backend does not authorize changing old circuit semantics. PCS_open fixes the opening interface and field, with PIOP, transcript and hiding code frozen in each immutable app. The draft gas figures illustrate pricing of one modelled withdrawal, not the long-term data or migration cost.",
+  "The proposed PCS_open add-only equivalence registry authenticates replacement commitments using old and new openings; it does not recover lost data or repair a broken old binding assumption. Migration must occur while the old PCS is sound, and new roots must uniquely bind their polynomials. Generators or full circuit publication give stronger recoverability than a bare commitment. Circuit-claim re-preparation from an authenticated circuit description permits new internal representations; one proof of preparation per circuit/backend is a possible optimization, not a built feature.",
+  "These are architecture options, not an implemented migration. The simplest path adds an ISA scheme to the same aggregate while retaining the old lane. A circuit-satisfaction interpreter on the ISA can check the original circuit and original-field arithmetic against its existing id and statement; the old interface remains a compatibility obligation. A protocol-recognized verified translation could accelerate it. PCS_open can place opening verification in a proven ISA program while preserving pOpen and MUL_FIELD and EVM validation; its immutable app PIOP remains unchanged. Proof wrappers that merely verify old proofs still trust the old proof system and cannot repair its soundness failure. Program identities, input binding, resource limits and acceptable proving cost must be specified and tested. New ISA apps bind a program and exact ISA version rather than an app circuit; old apps need deliberate compatibility or explicit migration. ISA-first can run one shared machine circuit under a circuit backend, then replace that backend later without exposing the machine circuit as the app identity.",
+  "Neither proposal is fully built. A future ISA backend does not make an immutable circuit or app PIOP backend-independent: old semantics still require support, possibly through emulation with overhead. An ISA-first interface instead pins program semantics from deployment. A field-native ISA may retain a field dependency, so program claims are not automatically field-independent."
 ];
 
 const BEATS=[]; let T=0,B=0;
@@ -642,57 +646,79 @@ scene(2,20,[h5,...r5.all,...e5.all,a5,...card5.all,b5],t=>{
  reveal(card5,t+11);A.fadeIn(b5,t+16,0.6);
 });
 
-/* 6. What travels, without byte-by-byte accounting. */
-const h6=headline('The same boundary splits the proof data');
-const heads6=[text(420,230,'PCS_open',{size:38,fill:P,anchor:'middle'}),text(1180,230,'circuit claims',{size:38,fill:O,anchor:'middle'})];
-const on6=[box(100,290,640,140,P,'on chain',['small PIOP proof + its values']),box(860,290,640,140,O,'on chain',['small claim naming circuit + transfer'])];
-const off6=[box(100,480,640,140,P,'off chain · beside the transaction',['separate opening proofs']),box(860,480,640,140,O,'off chain · beside the transaction',['one complete proof'])];
-const a6=[arrow(420,640,690,740,C.gold),arrow(1180,640,910,740,C.gold)];
-const end6=box(570,744,460,100,C.gold,'one aggregate block proof');
-scene(3,17,[h6,...heads6,...on6.flatMap(x=>x.all),...off6.flatMap(x=>x.all),...a6,...end6.all],t=>{
- A.fadeIn(h6,t+0.4,0.6);A.fadeIn(heads6,t+1,0.6);
- on6.forEach((q,i)=>reveal(q,t+2+i*2.2));off6.forEach((q,i)=>reveal(q,t+6.5+i*2.2));
- A.draw(a6,t+12,0.8);reveal(end6,t+13.5);
+
+/* 6. The identifier is small; availability is a separate obligation. */
+const h6=headline('A hash on chain. The full rules available.');
+const c6=box(95,240,650,300,O,'contract',['stores a short circuit id','does not need the full matrices','does not store the secret witness']);
+const d6=box(855,240,650,300,C.grey,'future proof backend',['needs the actual circuit rules','rebuilds a changed commitment','cannot reconstruct data from a hash']);
+const a6=arrow(760,375,840,375,O);
+const b6=mid(655,'On-chain publication? An archive? A compact description or generator?',{size:29});
+const b6a=mid(735,'The availability mechanism is still open.',{size:34,fill:C.yellow});
+const b6b=mid(813,'Preparation is per circuit and backend, not necessarily per transfer.',{size:25,fill:C.dim});
+scene(3,22,[h6,...c6.all,...d6.all,a6,b6,b6a,b6b],t=>{
+ A.fadeIn(h6,t+0.5,0.6);reveal(c6,t+1.5);A.draw(a6,t+5.7,0.7);reveal(d6,t+6.5);
+ A.fadeIn(b6,t+12,0.6);A.fadeIn(b6a,t+15.5,0.6);A.fadeIn(b6b,t+19,0.6);
 });
 
-/* 7. Only the consequences needed to understand the choice. */
-const h7=headline('Custom checker or shared checker?');
-const tradeL=box(100,235,640,350,P,'PCS_open · more app control',['choose and tune your own PIOP','pay to run it in the EVM','immutable app freezes its checker']);
-const tradeR=box(860,235,640,350,O,'circuit claims · more shared machinery',['one common circuit format','native whole-proof checking','shared checker can change by fork']);
-const gasL=text(135,529,'~108–128k gas · model estimate',{size:27,fill:P});
-const gasR=text(895,529,'~30k gas · draft price',{size:27,fill:O});
-const g7=mid(670,'Gas is illustrative: one modelled transfer, unresolved pricing.',{size:25,fill:C.dim});
-const risk7=mid(770,'A circuit bug stays in both. A shared verifier also shares its risks.',{size:29});
-scene(3,23,[h7,...tradeL.all,...tradeR.all,gasL,gasR,g7,risk7],t=>{
- A.fadeIn(h7,t+0.5,0.6);reveal(tradeL,t+1.5);reveal(tradeR,t+7.5);
- A.fadeIn([gasL,gasR],t+13.5,0.6);A.fadeIn(g7,t+16,0.6);A.fadeIn(risk7,t+19,0.6);
+/* 7. Make the magnitude and the escape routes explicit. */
+const h7=headline('Large circuits make this a serious design issue');
+const scale7=mid(208,'recursive example: matrices of order 2²⁸ × 2²⁸',{size:33,fill:C.yellow});
+const sparse7=box(95,285,650,300,O,'plain sparse R1CS',['most matrix entries are zero','store only the nonzeros + indices','the result can still be very large','sparse commitments add proof machinery']);
+const struct7=box(855,285,650,300,C.green,'compact circuit description',['repeat small tables + connect by a bus','or publish a deterministic generator','smaller description; extra semantics','expansion and preparation still cost work']);
+const base7=mid(698,'Sparsity helps prove the circuit. It does not keep the circuit available.',{size:28});
+const base7a=mid(790,'More structure starts to resemble how a zkVM is built.',{size:32,fill:C.green});
+scene(3,22,[h7,scale7,...sparse7.all,...struct7.all,base7,base7a],t=>{
+ A.fadeIn(h7,t+0.5,0.6);A.fadeIn(scale7,t+1.5,0.6);reveal(sparse7,t+3);reveal(struct7,t+9);
+ A.fadeIn(base7,t+16,0.6);A.fadeIn(base7a,t+19,0.6);
 });
 
-/* 8. The stable object explains the migration difference. */
-const h8=headline('A better PCS arrives. What has to be preserved?');
-const upL=box(100,245,640,340,P,'PCS_open · preserves a commitment',['contract stores a circuit commitment','new PCS → new commitment','check it describes the same data','proposed equivalence registry']);
-const upR=box(860,245,640,340,O,'circuit claims · preserves the rules',['contract stores the circuit’s id','same rules → new commitment','Ethereum rebuilds it from the circuit','the circuit must remain available']);
-const u8=mid(690,'Both aim to keep the pool contract unchanged.',{size:31,fill:C.green});
-const u8b=mid(762,'PCS_open’s app PIOP stays frozen. Circuit claims’ shared PIOP can evolve.',{size:28});
-const u8c=mid(829,'Migration details remain open. Neither can repair an immutable app’s rules.',{size:24,fill:C.dim});
-scene(4,23,[h8,...upL.all,...upR.all,u8,u8b,u8c],t=>{
- A.fadeIn(h8,t+0.5,0.6);reveal(upL,t+1.5);reveal(upR,t+8);
- A.fadeIn(u8,t+14,0.6);A.fadeIn(u8b,t+17.5,0.6);A.fadeIn(u8c,t+20.5,0.6);
+/* 8. Weigh the benefits and the costs without calling safety a drawback. */
+const h8=headline('The tradeoff is where the complexity lives');
+const tradeL=box(95,240,650,340,P,'PCS_open · app responsibility',['choose your own format and PIOP','pay to run the PIOP in the EVM','immutable PIOP, transcript and hiding code','PCS interface and field stay fixed']);
+const tradeR=box(855,240,650,340,O,'circuit claims · protocol responsibility',['one shared, fork-fixable proof checker','fixed constraint format + field family','large-circuit availability + preparation','shared verifier also shares its risks']);
+const safe8=mid(670,'A shared PIOP can be a safety advantage.',{size:34,fill:C.green});
+const both8=mid(738,'A bug in the app’s circuit stays in both.',{size:29});
+const gas8=mid(813,'Draft gas for one modelled spend: ~108–128k vs ~30k · not total lifecycle cost',{size:23,fill:C.dim});
+scene(4,22,[h8,...tradeL.all,...tradeR.all,safe8,both8,gas8],t=>{
+ A.fadeIn(h8,t+0.5,0.6);reveal(tradeL,t+1.5);reveal(tradeR,t+7);
+ A.fadeIn(safe8,t+13,0.6);A.fadeIn(both8,t+16.5,0.6);A.fadeIn(gas8,t+19.5,0.6);
 });
 
-/* 9. Finish with the choice, not another list of internals. */
-const h9=headline('Where should the PIOP live?');
-const sumL=box(100,265,640,290,P,'PCS_open',['app: rules + custom PIOP checker','Ethereum: shared PCS check']);
-const sumR=box(860,265,640,290,O,'circuit claims',['app: rules in a common format','Ethereum: both proof checks']);
-const takeL=text(420,642,'more app-level freedom',{size:34,fill:P,anchor:'middle'});
-const takeR=text(1180,642,'more shared proof machinery',{size:34,fill:O,anchor:'middle'});
-const final9=mid(770,'Same goal. Same two jobs. A different boundary.',{size:37});
-const end9=mid(837,'proposals · zero-knowledge construction and final pricing still open',{size:23,fill:C.dim});
-scene(5,16,[h9,...sumL.all,...sumR.all,takeL,takeR,final9,end9],t=>{
- A.fadeIn(h9,t+0.5,0.6);reveal(sumL,t+1.5);reveal(sumR,t+4.5);
- A.fadeIn([takeL,takeR],t+8,0.6);A.fadeIn(final9,t+10.5,0.7);A.fadeIn(end9,t+13,0.5);
+/* 9. Availability is not unique to one path; the authentication differs. */
+const h9=headline('PCS_open also needs its public circuit data');
+const upL=box(95,245,650,320,P,'PCS_open · checked replacement',['someone needs the public tables','opens old + new commitments to compare','clients need not all rebuild the tables','must migrate while the old PCS is sound']);
+const upR=box(855,245,650,320,O,'circuit claims · rebuild from rules',['authenticate the available circuit','compute the new backend’s commitment','cache it per circuit and backend','or prove correct preparation']);
+const u9=mid(685,'A registry of commitments cannot recover lost circuit data.',{size:30,fill:C.yellow});
+const u9b=mid(786,'Only circuit claims can replace the app PIOP by fork.',{size:31});
+scene(5,20,[h9,...upL.all,...upR.all,u9,u9b],t=>{
+ A.fadeIn(h9,t+0.5,0.6);reveal(upL,t+1.5);reveal(upR,t+7);
+ A.fadeIn(u9,t+13,0.6);A.fadeIn(u9b,t+16.5,0.6);
 });
-const CHAPTERS=[['Two jobs',1],['The boundary',2],['Consequences',3],['Upgrades',4],['The choice',5]];
+
+/* 10. Add an ISA while preserving old interfaces. */
+const h10=headline('Later: add an ISA lane, keep the old promises');
+const isaL=box(95,240,650,340,P,'from PCS_open',['prove the opening checker on the ISA','preserve the old opening interface','contracts still run their frozen PIOPs','benchmarks must show acceptable cost']);
+const isaR=box(855,240,650,340,O,'from circuit claims',['prove old circuit satisfaction on the ISA','preserve circuit ids, formats and fields','native support or a circuit interpreter','verified translation may improve speed']);
+const new10=mid(675,'New apps can name an ISA program. Old apps keep their old identities.',{size:28,fill:C.green});
+const warn10=mid(748,'Wrapping an old proof still trusts the old proof system.',{size:30,fill:C.yellow});
+const foot10=mid(820,'These compatibility paths need implementation and cost checks.',{size:25,fill:C.dim});
+scene(6,25,[h10,...isaL.all,...isaR.all,new10,warn10,foot10],t=>{
+ A.fadeIn(h10,t+0.5,0.6);reveal(isaL,t+1.5);reveal(isaR,t+8);
+ A.fadeIn(new10,t+14.5,0.6);A.fadeIn(warn10,t+18,0.6);A.fadeIn(foot10,t+22,0.6);
+});
+
+/* 11. End on the actual extent of the tradeoff. */
+const h11=headline('More app control, or more protocol responsibility?');
+const sumL=box(95,265,650,300,P,'PCS_open',['app chooses and freezes its PIOP','public data is still needed for proving','old app crypto remains a compatibility cost']);
+const sumR=box(855,265,650,300,O,'circuit claims',['shared PIOP can evolve by fork','format + field + circuit availability to solve','old circuits remain a compatibility cost']);
+const last11=mid(690,'Neither is a free stepping stone to an ISA.',{size:36,fill:C.yellow});
+const last11b=mid(770,'Preserve the app’s original meaning; change how it is proved.',{size:30});
+const end11=mid(834,'proposed designs · availability, preparation and migration still open',{size:23,fill:C.dim});
+scene(7,16,[h11,...sumL.all,...sumR.all,last11,last11b,end11],t=>{
+ A.fadeIn(h11,t+0.5,0.6);reveal(sumL,t+1.5);reveal(sumR,t+4.5);
+ A.fadeIn(last11,t+8.5,0.6);A.fadeIn(last11b,t+11,0.6);A.fadeIn(end11,t+13.5,0.5);
+});
+const CHAPTERS=[['Two jobs',1],['The boundary',2],['Big circuits',3],['Tradeoffs',4],['PCS upgrades',5],['Later ISA',6],['The choice',7]];
 /* ---------------- rendering ---------------- */
 function render(t) {
   const z = CAM.get('z', t), cx = CAM.get('cx', t), cy = CAM.get('cy', t);
