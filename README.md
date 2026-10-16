@@ -14,4 +14,8 @@ A second animation, *How PCS_open Works*, follows a transfer from the same pool 
 
 A third animation, *How circuit claims work*, follows the same transfer when the pool writes its rules in a constraint format Ethereum fixes, such as R1CS, and nodes check the whole proof natively. It mirrors the PCS_open version step by step and marks every step that differs from it. Open it at **https://soispoke.github.io/eip8288-private-transfer/circuit-claims/**. It shows an optional design under discussion, and its sizes and gas figures are draft prices or estimates, as its spec notes say.
 
-`index.html`, `pcs-open/index.html` and `circuit-claims/index.html` are single self-contained files. Their fonts are KaTeX's Computer Modern fonts, from [KaTeX](https://github.com/KaTeX/KaTeX) (MIT License).
+## PCS_open vs circuit claims
+
+A short comparison, *PCS_open vs circuit claims* (about 3 minutes), explains the one difference between the two designs, where the line falls between what each app brings and what Ethereum provides, and what follows from it. Open it at **https://soispoke.github.io/eip8288-private-transfer/compare/**.
+
+`index.html`, `pcs-open/index.html`, `circuit-claims/index.html` and `compare/index.html` are single self-contained files. Their fonts are KaTeX's Computer Modern fonts, from [KaTeX](https://github.com/KaTeX/KaTeX) (MIT License).
