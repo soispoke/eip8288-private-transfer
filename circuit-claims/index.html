@@ -545,7 +545,7 @@ const CAP = [
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
   'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes a hash of this transaction.',
   'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
-  'The pool’s rules are written as a circuit in R1CS: each row checks one product, (A·w) × (B·w) = C·w, where w lists her secret and public values and A, B, C are fixed tables of coefficients. Ethereum fixes the format, R1CS or its generalisation CCS, and the field: bits, so every value is 0 or 1. The pool chooses the rows.',
+  'The pool writes its rules as a circuit: a long list of small checks, each of the form “one sum times another sum equals a third”. Every value in them is a bit, 0 or 1. Ethereum fixes how the checks are written down, a format called R1CS (or its generalisation, CCS). Each pool only chooses its own list of checks.',
   'The pool’s code holds only the circuit’s id, a 32-byte hash of its constraints, fixed at deployment. The constraints travel with every proof as a compact description: a node hashes it and checks that it matches the id. A copy is kept on Ethereum when the pool deploys, so it is never lost. No verifier code sits in the contract.',
   'Her wallet proves that some witness satisfies this circuit for her statement. Inside, a polynomial commitment scheme (the PCS) seals her values, every rule is tested at once at one random point, and the sealed values are opened there to back the answer. It is all one proof π, checked only by nodes.',
   'π is bound to her statement, which includes a hash of this transaction, so it fits only this transaction. It travels in public, so it must be zero-knowledge, revealing nothing about the witness. For circuit claims, that is not built yet.',
@@ -759,7 +759,7 @@ const s5Mats = S5.mx.map((x, k) => Mat(x, S5.my, s5Dots[k], C.green));
 const s5MatL = ['A', 'B', 'C'].map((s, k) => Txt(S5.mx[k], S5.my - S5.h / 2 - 22, `<m>${s}</m>`, {size: 34, anchor: 'middle'}));
 const s5Ops = [Txt(610, S5.my + 12, '×', {size: 38, anchor: 'middle'}), Txt(990, S5.my + 12, '=', {size: 38, anchor: 'middle'})];
 const s5Head = Txt(800, 146, 'the pool’s rules, as a circuit in R1CS', {size: 34, anchor: 'middle', fill: C.green});
-const s5Eq = Txt(800, 214, 'each row checks one product:   (<m>A</m>·<m>w</m>) × (<m>B</m>·<m>w</m>) = <m>C</m>·<m>w</m>', {size: 30, anchor: 'middle'});
+const s5Eq = Txt(800, 214, 'each row is one check:   (<m>A</m>·<m>w</m>) × (<m>B</m>·<m>w</m>) = <m>C</m>·<m>w</m>', {size: 30, anchor: 'middle'});
 const s5Fixed = Txt(800, S5.my + S5.h / 2 + 34, '<m>A</m>, <m>B</m>, <m>C</m>: fixed tables of coefficients, mostly zero  ·  a real pool circuit has millions of rows', {size: 19, anchor: 'middle', fill: C.dim});
 const s5Band = new M(800, S5.my - S5.h / 2 + (S5.hi + 0.5) * S5.cell, null, 0);
 shape(s5Band, rr(-(S5.mx[2] - S5.mx[0] + S5.w + 36) / 2, -13, S5.mx[2] - S5.mx[0] + S5.w + 36, 26, 7), {stroke: C.yellow, sw: 2.5});
