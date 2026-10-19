@@ -527,17 +527,17 @@ function MiniWrap(x, y) {
 }
 
 const CAP = [
-  "Both options let Ethereum check a private transfer without seeing its secrets. Both use a STARK proof. They differ in who supplies the proof checker: how much belongs to each app, and how much Ethereum provides.",
-  "Think of the wallet’s private calculation as a sealed record. Checking its proof has two jobs. The PIOP checks the app’s rules using a few claimed answers from that record. The PCS checks that those answers really match the sealed data. Neither job is enough alone.",
-  "Now draw the boundary. With PCS_open, the app supplies its rules and its own PIOP checker; Ethereum provides the PCS check. With circuit claims, the app supplies just its rules in a common circuit format, and Ethereum provides both checks. The rules still belong to the app.",
-  "Follow PCS_open. The contract runs the app’s PIOP checker, then records claims about the sealed data. Nodes check separate opening proofs to confirm those claims. They reconstruct the claims by running the contract; the claims themselves are not sent. A block is valid only if both checks pass.",
-  "With circuit claims, the contract names the circuit and this transfer. The wallet supplies one complete proof. Nodes check both parts using Ethereum’s shared verifier, without running the contract first. The contract checks that the transaction names the correct circuit and transfer.",
-  "Circuit claims need the circuit to remain available, but not necessarily in contract storage. The contract can hold just its hash. If a new backend needs a different circuit commitment, someone must rebuild it from the full rules. A hash alone cannot do that. Publication and long-term retrieval need a real design.",
-  "Recursive R1CS can mean huge, mostly empty matrices. Sparse methods avoid storing every zero, but the remaining description can still be large. Repeated tables connected by a bus, or a compact circuit generator, can help. The price is a richer fixed format, or work to expand and prepare circuits after backend changes.",
-  "A shared PIOP can be safer: apps stop shipping their own cryptographic checker. The cost is committing Ethereum to a constraint format and field, plus circuit availability and preparation. PCS_open leaves that format to apps, but freezes their PIOP code. The choice is where to carry the complexity.",
-  "PCS_open also needs the public circuit data to produce proofs and replacement commitments. Its proposed upgrade checks a new commitment against the old one, so every client need not rebuild it. That relies on migrating while the old PCS is sound. Circuit claims can instead rebuild from the actual rules.",
-  "An ISA lane can be added beside either option. For circuit claims, Ethereum can prove the old circuit relation on the new machine. For PCS_open, it can prove the opening checker while contracts keep running their PIOPs. Both need compatibility rules and cost checks. Old contracts do not automatically become ISA apps.",
-  "The tradeoff: PCS_open gives apps more control and leaves them more cryptographic responsibility. Circuit claims centralize that responsibility, but must solve large-circuit availability and fix a format. Adding an ISA later keeps old promises; it does not erase them."
+  "Both options let Ethereum verify a private transfer without seeing its witness. Both use a STARK. They differ in who supplies the verifier: how much of it belongs to each app, and how much Ethereum provides.",
+  "The wallet commits to its witness as a polynomial, with a polynomial commitment scheme (PCS). Verifying the STARK then has two parts. The PIOP verifier checks the app’s constraints using a few claimed evaluations of the committed polynomial. The PCS verifier checks, with opening proofs, that those evaluations really match the commitment. Neither check is sound alone.",
+  "Now draw the boundary. With PCS_open, the app supplies its constraints and its own PIOP verifier; Ethereum provides the PCS verifier. With circuit claims, the app supplies only its constraints, in a fixed circuit format such as R1CS or CCS, and Ethereum provides both verifiers. The constraints still belong to the app.",
+  "Follow PCS_open. The contract runs the app’s PIOP verifier, then records evaluation claims about the committed polynomial. Nodes verify separate opening proofs for those claims. They derive the claims by executing the contract; the claims themselves are not sent. A block is valid only if both checks pass.",
+  "With circuit claims, the contract names the circuit and this transfer’s statement. The wallet supplies one complete STARK. Nodes verify both its PIOP and its PCS openings with Ethereum’s shared verifier, without executing the contract first. The contract only checks that the transaction names the correct circuit and statement.",
+  "Circuit claims need the circuit to remain available, but not necessarily in contract storage. The contract can hold just its hash. If a new proof system needs a different circuit commitment (its preprocessing), someone must recompute it from the full constraints. A hash alone cannot do that. Publication and long-term retrieval need a real design.",
+  "Recursive R1CS can mean huge sparse matrices. Sparse commitments such as Spark avoid committing to every zero, but the remaining description can still be large. Repeated tables connected by a bus (SIMD-R1CS), or a compact circuit generator, can help. The price is a richer fixed format, or work to expand and preprocess circuits after proof-system changes.",
+  "A shared PIOP can be safer: apps stop shipping their own PIOP verifier. The cost is committing Ethereum to a constraint format and field, plus circuit availability and preprocessing. PCS_open leaves the format to apps, but freezes their PIOP verifier code. The choice is where to carry the complexity.",
+  "PCS_open also needs the public circuit data to produce proofs and replacement commitments. Its proposed upgrade checks a new commitment against the old one, so every client need not recompute it. That relies on migrating while the old PCS is sound. Circuit claims can instead recompute commitments from the constraints.",
+  "An ISA lane can be added beside either option. For circuit claims, Ethereum can prove the old circuit’s satisfaction on the new machine. For PCS_open, it can prove the PCS verifier on the ISA while contracts keep running their PIOP verifiers. Both need compatibility rules and cost checks. Old contracts do not automatically become ISA apps.",
+  "The tradeoff: PCS_open gives apps more control and leaves them more cryptographic responsibility. Circuit claims centralize that responsibility, but must solve large-circuit availability and fix a format. Adding an ISA later keeps old commitments; it does not erase them."
 ];
 const NOTE = [
   "Both are proposals for private transfers, with zero-knowledge work still needed. The animation compares their intended interfaces, not finished implementations.",
@@ -573,11 +573,11 @@ const P=C.purple,O=C.orange;
 
 /* 1. Same goal; the comparison is about responsibility. */
 const h1=headline('One private transfer. Two ways to check its proof.');
-const wallet=box(180,260,430,215,C.blue,'wallet',['knows the secret inputs','makes a STARK proof']);
+const wallet=box(180,260,430,215,C.blue,'wallet',['knows the witness','makes a STARK proof']);
 const eth=box(990,260,430,215,C.gold,'Ethereum',['checks the proof','accepts a valid transfer']);
 const a1=arrow(635,366,965,366,C.gold);
-const p1=mid(585,'The same goal: enforce the app’s rules, keep secrets private.',{size:32});
-const f1=mid(710,'The difference: who supplies which part of the checker?',{size:35,fill:C.yellow});
+const p1=mid(585,'The same goal: enforce the app’s constraints, keep the witness private.',{size:32});
+const f1=mid(710,'The difference: who supplies which part of the verifier?',{size:35,fill:C.yellow});
 const st1=mid(814,'proposed designs · hiding proofs still to be built',{size:23,fill:C.dim});
 scene(1,12,[h1,...wallet.all,...eth.all,a1,p1,f1,st1],t=>{
  A.fadeIn(h1,t+0.2,0.6);reveal(wallet,t+1);A.draw(a1,t+2.6,0.8);reveal(eth,t+3.2);
@@ -585,15 +585,15 @@ scene(1,12,[h1,...wallet.all,...eth.all,a1,p1,f1,st1],t=>{
 });
 
 /* 2. Two jobs; no algebra required. */
-const h2=headline('A proof checker has two jobs');
-const record=box(110,230,440,210,C.blue,'sealed calculation data',['the wallet’s private record','represented by a commitment']);
-const answers=box(110,530,440,150,C.gold,'claimed answers',['used to check the rules']);
+const h2=headline('A STARK verifier has two parts');
+const record=box(110,230,440,210,C.blue,'polynomial commitment',['the wallet’s witness,','committed as a polynomial']);
+const answers=box(110,530,440,150,C.gold,'claimed evaluations',['used to check the constraints']);
 const a2=arrow(330,455,330,515);
-const j1=box(760,230,730,190,C.teal,'1 · PIOP: check the rules',['“If these answers are right,','the transfer follows the rules.”']);
-const j2=box(760,510,730,190,P,'2 · PCS: confirm the answers',['“These answers really match','the committed data.”']);
+const j1=box(760,230,730,190,C.teal,'1 · PIOP: check the constraints',['“If these evaluations are right,','the witness satisfies the constraints.”']);
+const j2=box(760,510,730,190,P,'2 · PCS: check the openings',['“These evaluations really match','the commitment.”']);
 const a2b=arrow(565,600,735,600,P);
 const a2c=arrow(580,556,735,357,C.teal);
-const both2=mid(805,'Rules check + data check. Both must pass.',{size:34,fill:C.yellow});
+const both2=mid(805,'PIOP check + PCS check. Both must pass.',{size:34,fill:C.yellow});
 scene(1,24,[h2,...record.all,...answers.all,a2,...j1.all,...j2.all,a2b,a2c,both2],t=>{
  A.fadeIn(h2,t+0.5,0.6);reveal(record,t+1.5);A.draw(a2,t+4,0.6);reveal(answers,t+4.7);
  A.draw(a2c,t+8,0.8);reveal(j1,t+9);A.draw(a2b,t+14,0.7);reveal(j2,t+15);
@@ -604,16 +604,16 @@ scene(1,24,[h2,...record.all,...answers.all,a2,...j1.all,...j2.all,a2b,a2c,both2
 const h3=headline('The only boundary that moves');
 const heads=[text(425,205,'PCS_open',{size:42,fill:P,anchor:'middle'}),text(1175,205,'circuit claims',{size:42,fill:O,anchor:'middle'})];
 function responsibility(cx,cc){
- const r=box(cx-300,254,600,115,C.green,'app’s circuit',['the rules for this transfer']);
- const p=box(cx-300,415,600,115,cc,'PIOP',['checks those rules']);
- const c=box(cx-300,576,600,115,C.grey,'PCS',['confirms the claimed answers']);
+ const r=box(cx-300,254,600,115,C.green,'app’s circuit',['its constraints for this transfer']);
+ const p=box(cx-300,415,600,115,cc,'PIOP',['checks those constraints']);
+ const c=box(cx-300,576,600,115,C.grey,'PCS',['checks the claimed evaluations']);
  return {r,p,c,all:[...r.all,...p.all,...c.all]};
 }
 // Compact boxes use one supporting line; shift title and text to fit.
 const left=responsibility(425,C.green),right=responsibility(1175,C.grey);
 const boundaries=[Line(105,552,745,552,P,{sw:4,dash:'12 8'}),Line(855,391,1495,391,O,{sw:4,dash:'12 8'})];
 const key3=mid(780,'Green: app supplies it  ·  Grey: Ethereum provides it',{size:29,fill:C.dim});
-const key3b=mid(832,'The app chooses the rules in both options.',{size:30});
+const key3b=mid(832,'The app chooses the constraints in both options.',{size:30});
 scene(2,22,[h3,...heads,...left.all,...right.all,...boundaries,key3,key3b],t=>{
  A.fadeIn(h3,t+0.5,0.6);A.fadeIn(heads,t+1,0.6);
  reveal(left.r,t+2);reveal(left.p,t+4);reveal(left.c,t+6);A.fadeIn(boundaries[0],t+8,0.6);
@@ -622,12 +622,12 @@ scene(2,22,[h3,...heads,...left.all,...right.all,...boundaries,key3,key3b],t=>{
 });
 
 /* 4. Follow a PCS_open proof. */
-const h4=headline('PCS_open: the contract does the rules check');
-const leftFlow=box(95,250,650,235,P,'app contract · runs in the EVM',['runs its custom PIOP checker','records the remaining data claims','claims are derived, not sent']);
-const rightFlow=box(855,250,650,235,C.grey,'nodes · native PCS check',['receive separate opening proofs','check the derived data claims','reject a block with false claims']);
+const h4=headline('PCS_open: the contract runs the PIOP verifier');
+const leftFlow=box(95,250,650,235,P,'app contract · runs in the EVM',['runs its own PIOP verifier','records the evaluation claims','claims are derived, not sent']);
+const rightFlow=box(855,250,650,235,C.grey,'nodes · native PCS verifier',['receive separate opening proofs','check the derived evaluation claims','reject a block with false claims']);
 const a4=arrow(760,366,840,366,P);
-const example=mid(600,'claim = “this answer matches this committed data”',{size:33});
-const commit4=mid(684,'The contract also stores a commitment to its fixed circuit data.',{size:27,fill:C.dim});
+const example=mid(600,'claim = “this evaluation matches this commitment”',{size:33});
+const commit4=mid(684,'The contract also stores a commitment to its fixed circuit polynomials.',{size:27,fill:C.dim});
 const b4=mid(795,'The contract checks one part; Ethereum enforces the rest.',{size:32,fill:P});
 scene(2,22,[h4,...leftFlow.all,...rightFlow.all,a4,example,commit4,b4],t=>{
  A.fadeIn(h4,t+0.5,0.6);reveal(leftFlow,t+1.5);A.draw(a4,t+6,0.8);reveal(rightFlow,t+7);
@@ -635,11 +635,11 @@ scene(2,22,[h4,...leftFlow.all,...rightFlow.all,a4,example,commit4,b4],t=>{
 });
 
 /* 5. The circuit is data for a shared checker. */
-const h5=headline('Circuit claims: Ethereum does both proof checks');
+const h5=headline('Circuit claims: Ethereum runs both verifiers');
 const r5=box(90,235,600,230,O,'app contract · names the circuit',['circuit id + transfer statement','checks they match this transfer','no PIOP code in the contract']);
-const e5=box(865,235,645,230,C.grey,'nodes · shared whole-proof checker',['read rules in one common format','check the PIOP and the PCS','use one complete off-chain proof']);
+const e5=box(865,235,645,230,C.grey,'nodes · shared STARK verifier',['read constraints in one fixed format','check the PIOP and the PCS','use one complete off-chain proof']);
 const a5=arrow(710,350,845,350,O);
-const card5=box(350,555,900,125,C.green,'the circuit is still chosen by the app',['Ethereum fixes how the rules are written, not what they say.']);
+const card5=box(350,555,900,125,C.green,'the circuit is still chosen by the app',['Ethereum fixes the constraint format, not the constraints.']);
 const b5=mid(795,'Nodes can check the proof before running any contract frame.',{size:30,fill:O});
 scene(2,20,[h5,...r5.all,...e5.all,a5,...card5.all,b5],t=>{
  A.fadeIn(h5,t+0.5,0.6);reveal(r5,t+1.3);A.draw(a5,t+5,0.7);reveal(e5,t+6);
@@ -648,13 +648,13 @@ scene(2,20,[h5,...r5.all,...e5.all,a5,...card5.all,b5],t=>{
 
 
 /* 6. The identifier is small; availability is a separate obligation. */
-const h6=headline('A hash on chain. The full rules available.');
+const h6=headline('A hash on chain. The full constraints available.');
 const c6=box(95,240,650,300,O,'contract',['stores a short circuit id','does not need the full matrices','does not store the secret witness']);
-const d6=box(855,240,650,300,C.grey,'future proof backend',['needs the actual circuit rules','rebuilds a changed commitment','cannot reconstruct data from a hash']);
+const d6=box(855,240,650,300,C.grey,'future proof system',['needs the actual constraints','recomputes the circuit commitment','cannot reconstruct data from a hash']);
 const a6=arrow(760,375,840,375,O);
 const b6=mid(655,'On-chain publication? An archive? A compact description or generator?',{size:29});
 const b6a=mid(735,'The availability mechanism is still open.',{size:34,fill:C.yellow});
-const b6b=mid(813,'Preparation is per circuit and backend, not necessarily per transfer.',{size:25,fill:C.dim});
+const b6b=mid(813,'Preparation is per circuit and proof system, not necessarily per transfer.',{size:25,fill:C.dim});
 scene(3,22,[h6,...c6.all,...d6.all,a6,b6,b6a,b6b],t=>{
  A.fadeIn(h6,t+0.5,0.6);reveal(c6,t+1.5);A.draw(a6,t+5.7,0.7);reveal(d6,t+6.5);
  A.fadeIn(b6,t+12,0.6);A.fadeIn(b6a,t+15.5,0.6);A.fadeIn(b6b,t+19,0.6);
@@ -675,7 +675,7 @@ scene(3,22,[h7,scale7,...sparse7.all,...struct7.all,base7,base7a],t=>{
 /* 8. Weigh the benefits and the costs without calling safety a drawback. */
 const h8=headline('The tradeoff is where the complexity lives');
 const tradeL=box(95,240,650,340,P,'PCS_open · app responsibility',['choose your own format and PIOP','pay to run the PIOP in the EVM','immutable PIOP, transcript and hiding code','PCS interface and field stay fixed']);
-const tradeR=box(855,240,650,340,O,'circuit claims · protocol responsibility',['one shared, fork-fixable proof checker','fixed constraint format + field family','large-circuit availability + preparation','shared verifier also shares its risks']);
+const tradeR=box(855,240,650,340,O,'circuit claims · protocol responsibility',['one shared, fork-fixable verifier','fixed constraint format + field family','large-circuit availability + preparation','shared verifier also shares its risks']);
 const safe8=mid(670,'A shared PIOP can be a safety advantage.',{size:34,fill:C.green});
 const both8=mid(738,'A bug in the app’s circuit stays in both.',{size:29});
 const gas8=mid(813,'Draft gas for one modelled spend: ~108–128k vs ~30k · not total lifecycle cost',{size:23,fill:C.dim});
@@ -686,8 +686,8 @@ scene(4,22,[h8,...tradeL.all,...tradeR.all,safe8,both8,gas8],t=>{
 
 /* 9. Availability is not unique to one path; the authentication differs. */
 const h9=headline('PCS_open also needs its public circuit data');
-const upL=box(95,245,650,320,P,'PCS_open · checked replacement',['someone needs the public tables','opens old + new commitments to compare','clients need not all rebuild the tables','must migrate while the old PCS is sound']);
-const upR=box(855,245,650,320,O,'circuit claims · rebuild from rules',['authenticate the available circuit','compute the new backend’s commitment','cache it per circuit and backend','or prove correct preparation']);
+const upL=box(95,245,650,320,P,'PCS_open · checked replacement',['someone needs the public tables','opens old + new commitments to compare','clients need not all recompute the tables','must migrate while the old PCS is sound']);
+const upR=box(855,245,650,320,O,'circuit claims · recompute from constraints',['authenticate the available circuit','compute the new circuit commitment','cache it per circuit and proof system','or prove correct preparation']);
 const u9=mid(685,'A registry of commitments cannot recover lost circuit data.',{size:30,fill:C.yellow});
 const u9b=mid(786,'Only circuit claims can replace the app PIOP by fork.',{size:31});
 scene(5,20,[h9,...upL.all,...upR.all,u9,u9b],t=>{
@@ -697,7 +697,7 @@ scene(5,20,[h9,...upL.all,...upR.all,u9,u9b],t=>{
 
 /* 10. Add an ISA while preserving old interfaces. */
 const h10=headline('Later: add an ISA lane, keep the old promises');
-const isaL=box(95,240,650,340,P,'from PCS_open',['prove the opening checker on the ISA','preserve the old opening interface','contracts still run their frozen PIOPs','benchmarks must show acceptable cost']);
+const isaL=box(95,240,650,340,P,'from PCS_open',['prove the PCS verifier on the ISA','preserve the old opening interface','contracts still run their frozen PIOPs','benchmarks must show acceptable cost']);
 const isaR=box(855,240,650,340,O,'from circuit claims',['prove old circuit satisfaction on the ISA','preserve circuit ids, formats and fields','native support or a circuit interpreter','verified translation may improve speed']);
 const new10=mid(675,'New apps can name an ISA program. Old apps keep their old identities.',{size:28,fill:C.green});
 const warn10=mid(748,'Wrapping an old proof still trusts the old proof system.',{size:30,fill:C.yellow});
@@ -709,7 +709,7 @@ scene(6,25,[h10,...isaL.all,...isaR.all,new10,warn10,foot10],t=>{
 
 /* 11. End on the actual extent of the tradeoff. */
 const h11=headline('More app control, or more protocol responsibility?');
-const sumL=box(95,265,650,300,P,'PCS_open',['app chooses and freezes its PIOP','public data is still needed for proving','old app crypto remains a compatibility cost']);
+const sumL=box(95,265,650,300,P,'PCS_open',['app chooses and freezes its PIOP','public data is still needed for proving','old app PIOP code remains a compatibility cost']);
 const sumR=box(855,265,650,300,O,'circuit claims',['shared PIOP can evolve by fork','format + field + circuit availability to solve','old circuits remain a compatibility cost']);
 const last11=mid(690,'Neither is a free stepping stone to an ISA.',{size:36,fill:C.yellow});
 const last11b=mid(770,'Preserve the app’s original meaning; change how it is proved.',{size:30});
@@ -718,7 +718,7 @@ scene(7,16,[h11,...sumL.all,...sumR.all,last11,last11b,end11],t=>{
  A.fadeIn(h11,t+0.5,0.6);reveal(sumL,t+1.5);reveal(sumR,t+4.5);
  A.fadeIn(last11,t+8.5,0.6);A.fadeIn(last11b,t+11,0.6);A.fadeIn(end11,t+13.5,0.5);
 });
-const CHAPTERS=[['Two jobs',1],['The boundary',2],['Big circuits',3],['Tradeoffs',4],['PCS upgrades',5],['Later ISA',6],['The choice',7]];
+const CHAPTERS=[['Two verifiers',1],['The boundary',2],['Big circuits',3],['Tradeoffs',4],['PCS upgrades',5],['Later ISA',6],['The choice',7]];
 /* ---------------- rendering ---------------- */
 function render(t) {
   const z = CAM.get('z', t), cx = CAM.get('cx', t), cy = CAM.get('cy', t);
