@@ -528,58 +528,62 @@ function MiniWrap(x, y) {
 
 /* ---------------- words ---------------- */
 const CAP = [
-  /* 0 */ 'An application whose identity is its rules, written in Lean, rather than its code.',
-  /* 1 */ 'Today a private application is identified by its code: a RISC-V program proved by leanVM, or a circuit proved by leanR1CS. The contract pins that code, so the choice is made once, at deployment, for good.',
-  /* 2 */ 'Yet neither machine wins everywhere. With a BLAKE2s protocol hash, a circuit proves a Merkle path about 3 times faster, while RISC-V checks a Falcon-512 signature about 11 times faster.',
-  /* 3 */ 'Instead, the application writes its rules in Lean. The hash of that definition, `spec_id`, becomes its permanent identity. The contract pins `spec_id`, and the rules themselves are stored on chain once.',
-  /* 4 */ 'The rules are a relation `R pub w`: a transaction is valid when its public inputs and a private witness satisfy them. The witness is explicit, so a proof shows someone knows it, not only that one exists.',
-  /* 5 */ 'The design uses two different kinds of proof. A Lean proof is mathematics: made once, it shows that some code obeys the rules for every input. A leanVM proof is a STARK: made every time, it shows that one run was correct.',
-  /* 6 */ 'Anyone can certify code for a spec. A Lean checker approved by the fork reads the rules, the code and the Lean proof. It builds the statement itself, on a pinned set of basic definitions, so a cleverly written proof cannot change what is being proved.',
-  /* 7 */ 'leanVM then proves that the checker said yes. That leanVM proof is the certificate. The code is stored on chain; the Lean proof and the certificate stay off chain.',
-  /* 8 */ 'To transact, Alice’s wallet proves with whichever certified code is fastest. The contract verifies no proof: it checks that the dependency names its own `spec_id` and that `data_hash` matches the public inputs.',
-  /* 9 */ 'A mempool node checks the transaction proof and the certificate, and that they agree: the same code, the same spec, the same public inputs, and code that is stored on chain.',
-  /* 10 */ 'The builder merges every proof into one leanVM proof for the block. Inside it, one verifier per machine accepts any program or any circuit, and each certificate turns a proof about code into a claim about a spec.',
-  /* 11 */ 'A validator verifies that single proof, checks that it covers exactly the block’s dependencies, and settles one leftover check per distinct piece of code, reading the code from state.',
-  /* 12 */ 'Contracts point to rules, never to code or a machine, so upgrades leave them alone. A new prover changes nothing on chain, a new machine just gets new code, and a machine can be retired only with an interpreter proven to behave identically.',
-  /* 13 */ 'The rules decide who bears a failure. A wrong spec hurts only its application. A broken checker or machine hurts everyone, so every machine the fork approves must be sound.',
-  /* 14 */ 'On chain: the rules and the code. Off chain: Lean proofs and certificates. Ethereum keeps forever only the claim format, Lean’s logic with three axioms, a small Lean prelude and the way rules are hashed.',
-  /* 15 */ 'Contracts pin rules, machines stay replaceable, and the choice between circuits and RISC-V becomes each application’s, made per piece of code rather than once at deployment.',
+  /* 0 title */ 'A design for private applications on Ethereum, explained from scratch.',
+  /* 1 setting */ 'Alice pays Bob through a privacy pool. Ethereum must check the payment is valid without seeing who paid whom or how much. So Alice attaches a small cryptographic proof.',
+  /* 2 layers */ 'Every such proof rests on three layers: the rules a valid payment must follow, the code that checks those rules, and a proving machine that turns one run of the code into a proof.',
+  /* 3 problem */ 'Today the pool’s contract remembers a fingerprint of the code. That fixes the code, and the machine that proves it, for as long as the contract lives.',
+  /* 4 machines */ 'That hurts, because proving machines differ. A circuit is about 3 times faster at hashing. A RISC-V program is about 11 times faster at signature arithmetic. Each application must pick one, forever.',
+  /* 5 idea */ 'The idea: the contract remembers a fingerprint of the rules instead. The rules are written in Lean, a language for precise mathematical definitions. Code becomes replaceable: any code that follows the rules will do, on any machine.',
+  /* 6 question */ 'But how can anyone be sure that a piece of code really follows the rules?',
+  /* 7 lean proof */ 'With a Lean proof: a mathematical proof that, for every possible input, whenever the code accepts, the rules hold. A program called the Lean checker verifies it, once per piece of code.',
+  /* 8 two proofs */ 'So there are two kinds of proof, and they should not be confused. A Lean proof is about code, for all inputs, made once. A payment proof is about one payment, made every time.',
+  /* 9 certificate */ 'Ethereum cannot run the Lean checker itself, so leanVM runs it and proves the result. That proof is the code’s certificate. The rules and the code are stored on chain; Lean proofs and certificates are kept off chain.',
+  /* 10 wallet */ 'To pay, Alice’s wallet uses whichever certified code is fastest. The transaction names the rules fingerprint, and the payment proof and certificate travel beside it. The contract checks only that the fingerprint is its own.',
+  /* 11 network */ 'Nodes check the payment proof, the certificate, and that both refer to the same code and rules. A builder merges every proof in the block into one, and validators check just that one.',
+  /* 12 upgrades */ 'Since contracts remember only rules, upgrades happen around them. Provers improve, machines are added or retired, a buggy checker is replaced, and no contract changes.',
+  /* 13 limits */ 'A mistake in an application’s rules hurts only that application. A broken Lean checker or proving machine would hurt everyone, so Ethereum must approve only sound ones. Several pieces are not built yet.',
+  /* 14 summary */ 'Contracts remember the rules. Code and machines can change underneath them.',
 ];
 const NOTE = [
-  'Design sketch in the vault page Lean Specifications as Application Identity, after two audits (2026-10-26 and 2026-10-27). Nothing is built; costs are unmeasured except where a measurement is cited.',
-  'The program lane (`ERV64_V1`, an image under a machine profile) and the circuit lane (an R1CS description identified by its generator) each fix the application to one machine.',
-  'Wallet proof times at 12 threads on a shared Xeon 6230R, development runs: BLAKE2s Merkle path depth 20, leanVM 0.074 s and leanR1CS 0.024 s; Falcon-512, leanVM 0.53 s and leanR1CS 5.88 s with Keccak rows. With Keccak as the only hash, leanVM is faster at every stage.',
-  '`spec_id` hashes a canonical encoding of the relation and every definition it uses above a pinned prelude; `lean4export` output is not canonical. The relation is stored in state through a content-addressed store, not calldata, because history expiry (EIP-4444) drops calldata. It is the only artifact whose loss cannot be repaired.',
-  'A relation on public input alone, `∃ w, R pub w`, would certify truth, not knowledge: every point has a discrete logarithm and every Pedersen commitment opens to every value. The implementation must hold `w` in a witness region, and the soundness theorem is `∀ pub w adv, B.Run impl pub w adv → R pub w`.',
-  'The checker never runs inside a transaction. The certificate is a leanVM proof about a Lean proof, because Ethereum cannot run Lean’s checker directly.',
-  'Checker rules: environment = pinned prelude, then the fork’s machine model, then the relation; nothing may redefine a name already present (the Lean kernel trusts accelerated `Nat` operations by name, and a forged `Nat.add` made Lean 4.34.1 accept contradictory theorems); the checker builds `impl` from the code bytes and writes the theorem itself; only `propext`, `Quot.sound` and `Classical.choice` are allowed; Lean’s kernel and nanoda must both accept.',
-  'Certificate output: `H(model_version, backend_id, spec_id, impl_id, export_hash)`. Its `checker_id` must be on the fork’s approved list. Proving a long checker run needs continuations or a checker split into pieces, which leanVM does not have yet. A certificate is re-proven once after any fork that changes leanVM’s own proof system; anyone holding the Lean proof can do it.',
-  'The wallet’s proof states `(impl_id, data_hash)` with `data_hash = H(pub)` computed by the machine’s harness, not by the code. The dependency is `(SPEC_V1, data_hash, spec_id)`.',
-  'Mempool nodes cache certificates they have verified. Each aggregate caps distinct certificates, and the first use of a certificate in a block pays a surcharge, since an implementation that rejects everything is trivially sound and could otherwise be used to spam certificates.',
-  'This step needs dynamic key recursion: verifying, inside the aggregate, a proof whose program or circuit is given as data. Neither leanVM nor leanR1CS has it yet; the plain program and circuit lanes need it too.',
-  'Both systems carry a claim about each program’s bytecode or circuit’s matrices up the tree and settle one per distinct identity at the root. Code is therefore kept in state; settling against an off-chain code commitment was audited and rejected for now.',
-  'Retirement rule: the interpreter `I` must satisfy both `B₂.Run I pub (impl, w) adv₂ → ∃ adv, B₁.Run impl pub w adv` for all runs and the converse within B₁’s bounds; one direction alone would allow an interpreter that rejects everything.',
-  'Two independent kernels guard against a bug in one of them, not against the checker’s wrapper, its RISC-V build or Lean’s logic. Loss is possible before a fork fixes a bug; settled transactions are final.',
-  'Permanent: the `SPEC_V1` claim format with its hash, Lean’s logic with `propext`, `Quot.sound` and `Classical.choice`, a prelude of kernel-special and basic definitions, and the canonical encoding of relations. Checkers, machine models and provers are versioned by fork.',
-  'Still open: a checker leanVM can prove in pieces; dynamic key recursion across machines; zero knowledge in both provers; and the size of real Lean proofs. sig.golf’s exported Lean proof reached 8.3 GB, so experiment 1 measures a proof for one compiled Merkle-path program first.',
+  'Vault page: Lean Specifications as Application Identity, a design sketch audited twice (2026-10-26 and 2026-10-27). Nothing is built; the only measurements are the development timings cited in step 4.',
+  'Under EIP-8288 the transaction carries a proof dependency, and the proof itself travels beside the transaction; the block carries one aggregate proof covering every dependency.',
+  'Terms used later: the rules are a relation `R pub w` between public inputs `pub` and a private witness `w`; the code is an implementation (a RISC-V image or a circuit); the proving machine is a backend (leanVM for RISC-V, leanR1CS for circuits). Proofs are STARKs.',
+  'In the program lane the contract pins an `image_id` (`ERV64_V1`); in the circuit lane it pins a circuit identity derived from the circuit’s description. Either way the application is tied to one machine.',
+  'Wallet proof times at 12 threads, development runs with a BLAKE2s protocol hash: Merkle path of depth 20, leanVM 0.074 s and leanR1CS 0.024 s; Falcon-512, leanVM 0.53 s and leanR1CS 5.88 s with Keccak rows. With Keccak as the only hash, leanVM is faster at every stage.',
+  'The fingerprint is `spec_id`, the hash of a canonical encoding of the relation and every definition it uses above a small pinned Lean prelude. The dependency the contract checks is `(SPEC_V1, data_hash, spec_id)`.',
+  'Code accepted for an application must be proven to accept only what the rules allow; nothing about the code is taken on trust.',
+  'The soundness theorem is `∀ pub w adv, B.Run impl pub w adv → R pub w`: every run the machine model accepts carries a witness satisfying the rules, so a proof shows knowledge of a witness, not only that one exists. The checker builds this statement itself on a pinned prelude, allows only `propext`, `Quot.sound` and `Classical.choice`, and requires Lean’s kernel and nanoda to agree.',
+  'Lean proofs can be large (sig.golf’s exported proof reached 8.3 GB). Payment proofs are leanVM or leanR1CS STARKs of roughly 200 KB that verify in milliseconds.',
+  'The certificate is a leanVM proof whose output is `H(model_version, backend_id, spec_id, impl_id, export_hash)`, from a `checker_id` on the fork’s approved list. Rules and code live in state because validators need the code and the rules cannot be rebuilt if lost. A certificate is re-proven once after any fork that changes leanVM’s own proof system.',
+  'Wallet times are for the shielded spend, BLAKE2s edition, development runs. `data_hash = H(pub)` is computed by the machine’s harness. The EVM verifies no proof.',
+  'Inside the block proof, one verifier per machine accepts any program or any circuit given as data (dynamic key recursion, not built yet), and each certificate turns a proof about code into a claim about rules. Each distinct piece of code leaves one check that the final verifier settles from the code in state.',
+  'A machine can be retired only with an interpreter proven to behave identically in both directions; proving only one direction would allow an interpreter that rejects everything. After a fix to the Lean checker, certificates are re-proven from the published Lean proofs.',
+  'Not built: a Lean checker leanVM can prove in pieces (leanVM has no continuations), dynamic key recursion across machines, zero knowledge in both provers, and a measurement of real Lean proof sizes (experiment 1: one compiled Merkle-path program).',
+  'Permanent: the `SPEC_V1` claim format and its hash, Lean’s logic with three axioms, a small Lean prelude, and the canonical encoding of rules. Checkers, machine models and provers are versioned by fork.',
 ];
 
 /* ---------------- helpers for this animation ---------------- */
-/* A gold proof badge: every leanVM or leanR1CS proof (a STARK) uses it, so it never looks like a Lean proof. */
+/* Every STARK (a payment proof, a block proof, a certificate) is a gold badge; every Lean proof is purple pages. */
 function Stark(x, y, label, o = {}) {
-  const k = o.k ?? 1, size = (o.size ?? 21) * k, w = (o.w ?? Math.max(104, label.replace(/<[^>]+>/g, '').length * 11.5 + 30)) * k, h = 40 * k;
+  const k = o.k ?? 1, size = (o.size ?? 21) * k, w = (o.w ?? Math.max(96, label.replace(/<[^>]+>/g, '').length * 11.5 + 30)) * k, h = 40 * k;
   const m = new M(x, y, o.parent, o.o);
   m.w = w; m.h = h;
   shape(m, rr(-w / 2, -h / 2, w, h, 11 * k), {fill: C.stage, fo: 1});
   shape(m, rr(-w / 2, -h / 2, w, h, 11 * k), {stroke: C.gold, sw: 2.8, fill: C.gold, fo: 0.2, draw: false});
-  rich(m.inner, 0, 7.6 * k, label, {size, fill: C.gold, anchor: 'middle'});
+  rich(m.inner, 0, 7.4 * k, label, {size, fill: C.gold, anchor: 'middle'});
   return m;
 }
-/* A Lean proof: a purple page stack, so it never looks like a STARK. */
-const LeanDoc = (x, y, o = {}) => Pile(x, y, 3, {w: o.w ?? 96, h: o.h ?? 124, col: C.purple, lines: 4, ...o});
+const LeanDoc = (x, y, o = {}) => Pile(x, y, 3, {w: o.w ?? 56, h: o.h ?? 72, col: C.purple, lines: 3, ...o});
+function Tag(x, y, label, col, o = {}) {
+  const size = o.size ?? 17, w = label.length * size * 0.52 + 20, h = size * 1.5, m = new M(x, y, o.parent, 0);
+  shape(m, rr(-w / 2, -h / 2, w, h, h / 2), {stroke: col, sw: 1.6, fill: col, fo: 0.12, draw: false});
+  rich(m.inner, 0, size * 0.34, label, {size, fill: col, anchor: 'middle'});
+  return m;
+}
 const all = [];
 const keep = (...ms) => { all.push(...ms.flat(Infinity)); return ms.length === 1 ? ms[0] : ms; };
 const clear = (t, d = 0.6) => { A.fadeOut(all.filter((m) => m.get('o', t) > 0.01), t, d); };
+const showAgain = (ms, t, d = 0.6) => A.fadeIn(ms, t, d);
 
 /* ---------------- the scenes ---------------- */
 const BEATS = [];
@@ -587,371 +591,353 @@ let T = 0, B = 0;
 const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, t0, t1: T, cap: CAP[B], note: NOTE[B]}); B++; };
 
 /* 0. Title */
-const title = keep(Txt(800, 360, 'Lean specifications as application identity', {size: 58, anchor: 'middle'}));
-const sub1 = keep(Txt(800, 446, 'the rules are the identity   ·   code is replaceable   ·   contracts never change', {size: 29, anchor: 'middle', fill: C.dim}));
-const sub2 = keep(Txt(800, 504, 'design sketch  ·  audited twice  ·  nothing built yet', {size: 22, anchor: 'middle', fill: C.dim}));
-beat(0, 9, (t) => {
+const title = keep(Txt(800, 370, 'Identify apps by their rules, not their code', {size: 56, anchor: 'middle'}));
+const sub1 = keep(Txt(800, 450, 'private applications on Ethereum, with Lean specifications', {size: 28, anchor: 'middle', fill: C.dim}));
+const sub2 = keep(Txt(800, 506, 'a design sketch  ·  not built yet', {size: 22, anchor: 'middle', fill: C.dim}));
+beat(0, 8, (t) => {
   A.write(title, t + 0.2, 1.8);
   A.fadeIn(sub1, t + 1.4, 0.8, {dy: 12});
   A.fadeIn(sub2, t + 1.9, 0.8, {dy: 12});
 });
 const POSTER = 3.0;
 
-/* 1. Today: the contract pins code */
-const cA = keep(Card(90, 150, 400, 150, C.grey, {fo: 0.05}));
-const cAT = keep(CT(cA, 24, 50, 'pool contract', {size: 30}));
-const cARow = keep(CT(cA, 24, 104, 'pins', {size: 23, fill: C.dim}));
-const cAChip = keep(MC(cA, 230, 96, '<c>image_id</c>', C.teal, {w: 170, size: 22}));
-const rv = keep(Card(640, 150, 360, 150, C.teal));
-const rvT = keep(CT(rv, 180, 64, 'RISC-V program', {size: 30, fill: C.teal, anchor: 'middle'}));
-const rvS = keep(CT(rv, 180, 108, 'proved by leanVM', {size: 22, fill: C.dim, anchor: 'middle'}));
-const aA = keep(Arrow(492, 225, 632, 225, C.teal));
-const cB = keep(Card(90, 400, 400, 150, C.grey, {fo: 0.05}));
-const cBT = keep(CT(cB, 24, 50, 'another contract', {size: 30}));
-const cBRow = keep(CT(cB, 24, 104, 'pins', {size: 23, fill: C.dim}));
-const cBChip = keep(MC(cB, 230, 96, '<c>circuit_id</c>', C.green, {w: 190, size: 22}));
-const ci = keep(Card(640, 400, 360, 150, C.green));
-const ciT = keep(CT(ci, 180, 64, 'circuit', {size: 30, fill: C.green, anchor: 'middle'}));
-const ciS = keep(CT(ci, 180, 108, 'proved by leanR1CS', {size: 22, fill: C.dim, anchor: 'middle'}));
-const aB = keep(Arrow(492, 475, 632, 475, C.green));
-const idIs = keep(Txt(1290, 330, 'identity  =  the code', {size: 38, anchor: 'middle'}));
-const forever = keep(Txt(1290, 390, 'chosen once, at deployment, for good', {size: 24, anchor: 'middle', fill: C.dim}));
-const lockA = keep(Lock(1290, 460, C.dim, {k: 1.6}));
-beat(1, 14, (t) => {
-  clear(t);
-  A.draw(cA, t + 0.6, 1.0); A.write(cAT, t + 1.0, 0.7); A.fadeIn(cARow, t + 1.5, 0.5); A.fadeIn(cAChip, t + 1.8, 0.5, {s0: 0.6});
-  A.draw(aA, t + 2.6, 0.7); A.draw(rv, t + 3.0, 1.0); A.write(rvT, t + 3.4, 0.7); A.fadeIn(rvS, t + 3.9, 0.5);
-  A.draw(cB, t + 5.0, 1.0); A.write(cBT, t + 5.4, 0.7); A.fadeIn(cBRow, t + 5.9, 0.5); A.fadeIn(cBChip, t + 6.2, 0.5, {s0: 0.6});
-  A.draw(aB, t + 7.0, 0.7); A.draw(ci, t + 7.4, 1.0); A.write(ciT, t + 7.8, 0.7); A.fadeIn(ciS, t + 8.3, 0.5);
-  A.write(idIs, t + 9.4, 1.0); A.fadeIn(forever, t + 10.4, 0.6, {dy: 8}); A.fadeIn(lockA, t + 11.2, 0.5); A.pulse(lockA, t + 11.7, 0.8, 1.3);
-});
-
-/* 2. Today: neither machine wins everywhere */
-const winT = keep(Txt(800, 130, 'neither machine wins everywhere', {size: 40, anchor: 'middle'}));
-const BX = 520, BW = 860;
-const bars = [
-  {label: 'Merkle path, depth 20', y: 260, a: 0.074, b: 0.024, verdict: 'circuit about 3× faster', vc: C.green},
-  {label: 'Falcon-512 signature', y: 520, a: 0.53, b: 5.88, verdict: 'RISC-V about 11× faster', vc: C.teal},
-].map((r) => {
-  const mx = Math.max(r.a, r.b), wa = BW * r.a / mx, wb = BW * r.b / mx;
-  const lab = Txt(470, r.y + 8, r.label, {size: 27, anchor: 'end'});
-  const ba = Card(BX, r.y - 46, Math.max(wa, 6), 38, C.teal, {fo: 0.35, r: 6, sw: 2});
-  const bb = Card(BX, r.y + 10, Math.max(wb, 6), 38, C.green, {fo: 0.35, r: 6, sw: 2});
-  const ta = Txt(BX + Math.max(wa, 6) + 14, r.y - 19, `leanVM ${r.a} s`, {size: 21, fill: C.teal});
-  const tb = Txt(BX + Math.max(wb, 6) + 14, r.y + 37, `leanR1CS ${r.b} s`, {size: 21, fill: C.green});
-  const v = Txt(800, r.y + 112, r.verdict, {size: 27, anchor: 'middle', fill: r.vc});
-  keep(lab, ba, bb, ta, tb, v);
-  return {lab, ba, bb, ta, tb, v};
-});
-const foot2 = keep(Txt(800, 820, 'wallet proof time  ·  BLAKE2s protocol hash  ·  12 threads  ·  development runs', {size: 19, anchor: 'middle', fill: C.faint}));
+/* 1. Setting: a private payment */
+const alice = keep(Token(170, 420, 'A', C.blue, {r: 40}));
+const aliceL = keep(Txt(170, 500, 'Alice', {size: 24, anchor: 'middle', fill: C.dim}));
+const tx = keep(Card(330, 320, 520, 200, C.yellow, {fo: 0.04, dash: '7 5'}));
+const txT = keep(CT(tx, 24, 46, 'transaction', {size: 26, fill: C.yellow}));
+const txBody = keep(CT(tx, 260, 112, 'pay Bob 1 ETH', {size: 30, anchor: 'middle'}));
+const txLock = keep(Lock(...at(tx, 400, 104), C.red, {parent: tx, k: 1.2}));
+const txHid = keep(CT(tx, 260, 160, 'details hidden', {size: 21, fill: C.red, anchor: 'middle'}));
+const txProof = keep(Stark(850, 520, 'proof'));
+const aTx1 = keep(Arrow(218, 420, 322, 420, C.blue));
+const pool = keep(Card(1040, 320, 440, 200, C.grey, {fo: 0.05}));
+const poolT = keep(CT(pool, 24, 50, 'privacy pool contract', {size: 28}));
+const poolC = keep(Check(...at(pool, 46, 120), C.green, {parent: pool}));
+const poolCT = keep(CT(pool, 76, 128, 'the proof is valid', {size: 25}));
+const aTx2 = keep(Arrow(858, 420, 1032, 420, C.yellow));
+const sees = keep(Txt(800, 660, 'Ethereum sees: a proof that the payment follows the pool’s rules', {size: 25, anchor: 'middle', fill: C.green}));
+const notSees = keep(Txt(800, 712, 'Ethereum does not see: who paid whom, or how much', {size: 25, anchor: 'middle', fill: C.red}));
 beat(1, 15, (t) => {
   clear(t);
-  A.write(winT, t + 0.6, 1.0);
-  bars.forEach((r, i) => {
-    const s = t + 1.8 + i * 4.4;
-    A.fadeIn(r.lab, s, 0.5, {dx: -10});
-    A.draw(r.ba, s + 0.6, 1.0); A.fadeIn(r.ta, s + 1.4, 0.4);
-    A.draw(r.bb, s + 1.2, 1.0); A.fadeIn(r.tb, s + 2.0, 0.4);
-    A.fadeIn(r.v, s + 2.8, 0.6, {dy: 8});
-  });
-  A.fadeIn(foot2, t + 11.2, 0.6);
+  A.fadeIn([alice, aliceL], t + 0.6, 0.6, {s0: 0.6});
+  A.draw(aTx1, t + 1.4, 0.5); A.draw(tx, t + 1.7, 1.0); A.fadeIn(txT, t + 2.1, 0.5); A.write(txBody, t + 2.5, 0.9);
+  A.fadeIn(txLock, t + 3.8, 0.4); A.pulse(txLock, t + 4.2, 0.7, 1.3); A.fadeIn(txHid, t + 4.3, 0.5);
+  A.fadeIn(txProof, t + 5.8, 0.5, {s0: 0.5}); A.pulse(txProof, t + 6.4, 0.7, 1.2);
+  A.draw(aTx2, t + 7.4, 0.6); A.draw(pool, t + 7.8, 1.0); A.write(poolT, t + 8.2, 0.8);
+  A.draw(poolC, t + 9.3, 0.4); A.fadeIn(poolCT, t + 9.4, 0.5);
+  A.fadeIn(sees, t + 10.6, 0.6, {dy: 8}); A.fadeIn(notSees, t + 11.6, 0.6, {dy: 8});
 });
 
-/* 3. The rules, in Lean */
-const spec = keep(Card(90, 150, 760, 300, C.blue));
-const specT = keep(CT(spec, 28, 50, 'the rules, in Lean', {size: 30, fill: C.blue}));
-const SRC = ['<k=blue>def</k> Spend (pub w : Bytes) : Prop :=', '  merkleRoot w.path (noteCommit w.note) = pub.root ∧', '  nullifier w.sk w.note = pub.nullifier ∧', '  w.note.value = pub.amountOut + pub.fee'];
-const srcRows = keep(SRC.map((s, i) => CT(spec, 34, 116 + 44 * i, `<c>${s}</c>`, {size: 21})));
-const hashA = keep(Arrow(860, 300, 1010, 300, C.blue));
-const hashL = keep(Txt(935, 280, 'hash', {size: 22, fill: C.dim, anchor: 'middle'}));
-const specId = keep(Chip(1110, 300, 'spec_id', C.blue, {size: 28}));
-const pinCard = keep(Card(1000, 470, 520, 150, C.grey, {fo: 0.05}));
-const pinT = keep(CT(pinCard, 24, 50, 'pool contract', {size: 30}));
-const pinRow = keep(CT(pinCard, 24, 106, 'pins', {size: 23, fill: C.dim}));
-const pinChip = keep(MC(pinCard, 210, 98, '<c>spec_id</c>', C.blue, {w: 150, size: 22}));
-const pinA = keep(Arrow(1110, 330, 1170, 465, C.blue, {bend: -20}));
-const chain = keep(Card(60, 700, 1480, 120, C.yellow, {fo: 0.035, sw: 2, dash: '8 6'}));
-const chainT = keep(CT(chain, 24, 40, 'on chain', {size: 22, fill: C.yellow}));
-const chainSpec = keep(Chip(330, 770, 'Spend  (the rules, stored once)', C.blue, {size: 21}));
-const toChain = keep(Arrow(330, 455, 330, 745, C.blue, {bend: 0}));
-beat(2, 17, (t) => {
+/* 2. Three layers: rules, code, proving machine */
+const LY = 190, LH = 230;
+const rulesC = keep(Card(110, LY, 440, LH, C.blue));
+const rulesT = keep(CT(rulesC, 26, 52, 'rules', {size: 32, fill: C.blue}));
+const rulesL = keep(['1.  Alice owns the note she spends', '2.  that note was never spent before', '3.  the amounts add up'].map((s, i) => CT(rulesC, 30, 112 + 42 * i, s, {size: 21})));
+const codeC = keep(Card(630, LY, 380, LH, C.teal));
+const codeT = keep(CT(codeC, 26, 52, 'code', {size: 32, fill: C.teal}));
+const codeL = keep(['a program that checks', 'the rules on Alice’s', 'private data'].map((s, i) => CT(codeC, 30, 112 + 42 * i, s, {size: 21})));
+const machC = keep(Card(1090, LY, 400, LH, C.gold));
+const machT = keep(CT(machC, 26, 52, 'proving machine', {size: 32, fill: C.gold}));
+const machL = keep(['runs the code once and', 'outputs a proof that', 'the run was correct'].map((s, i) => CT(machC, 30, 112 + 42 * i, s, {size: 21})));
+const lA1 = keep(Arrow(556, LY + LH / 2, 622, LY + LH / 2, C.dim));
+const lA2 = keep(Arrow(1016, LY + LH / 2, 1082, LY + LH / 2, C.dim));
+const under = keep([[330, 'what must hold'], [820, 'how it is checked'], [1290, 'how the check is proven']].map(([x, s]) => Txt(x, LY + LH + 46, s, {size: 23, fill: C.dim, anchor: 'middle'})));
+const lProof = keep(Stark(1290, 590, 'proof'));
+const lA3 = keep(Arrow(1290, LY + LH + 66, 1290, 564, C.gold));
+beat(1, 16, (t) => {
   clear(t);
-  A.draw(spec, t + 0.6, 1.1); A.write(specT, t + 1.1, 0.8);
-  srcRows.forEach((r, i) => A.write(r, t + 2.0 + i * 0.9, 1.0));
-  A.draw(hashA, t + 6.2, 0.7); A.fadeIn(hashL, t + 6.4, 0.4); A.fadeIn(specId, t + 6.9, 0.6, {s0: 0.5}); A.pulse(specId, t + 7.6, 0.8, 1.2);
-  A.draw(pinCard, t + 8.6, 1.0); A.write(pinT, t + 9.0, 0.7); A.fadeIn(pinRow, t + 9.4, 0.4); A.draw(pinA, t + 9.6, 0.8); A.fadeIn(pinChip, t + 10.2, 0.5, {s0: 0.6});
-  A.draw(chain, t + 11.6, 1.0); A.fadeIn(chainT, t + 12.0, 0.5); A.draw(toChain, t + 12.4, 0.8); A.fadeIn(chainSpec, t + 13.1, 0.6, {s0: 0.7});
+  A.draw(rulesC, t + 0.8, 1.0); A.write(rulesT, t + 1.2, 0.6); A.fadeIn(rulesL, t + 1.8, 0.5, {lag: 0.6, dx: -8}); A.fadeIn(under[0], t + 3.6, 0.5);
+  A.draw(lA1, t + 4.6, 0.5); A.draw(codeC, t + 4.9, 1.0); A.write(codeT, t + 5.3, 0.6); A.fadeIn(codeL, t + 5.9, 0.5, {lag: 0.4, dx: -8}); A.fadeIn(under[1], t + 7.2, 0.5);
+  A.draw(lA2, t + 8.2, 0.5); A.draw(machC, t + 8.5, 1.0); A.write(machT, t + 8.9, 0.6); A.fadeIn(machL, t + 9.5, 0.5, {lag: 0.4, dx: -8}); A.fadeIn(under[2], t + 10.8, 0.5);
+  A.draw(lA3, t + 12.0, 0.5); A.fadeIn(lProof, t + 12.4, 0.5, {s0: 0.5});
 });
 
-/* 4. The relation: public inputs and a private witness */
-const relT = keep(Txt(800, 140, '<m>R</m>  ( pub ,  w )', {size: 56, anchor: 'middle'}));
-const pubC = keep(Card(170, 250, 540, 300, C.blue));
-const pubT = keep(CT(pubC, 28, 54, 'pub  ·  public inputs', {size: 29, fill: C.blue}));
-const pubRows = keep(['Merkle root', 'nullifiers', 'amount out, fee'].map((s, i) => CT(pubC, 34, 130 + 52 * i, s, {size: 24})));
-const pubNote = keep(CT(pubC, 34, 276, 'everyone sees these', {size: 21, fill: C.dim}));
-const witC = keep(Card(890, 250, 540, 300, C.red));
-const witT = keep(CT(witC, 28, 54, 'w  ·  witness', {size: 29, fill: C.red}));
-const witL = keep(Lock(...at(witC, 480, 44), C.red, {parent: witC, k: 0.9}));
-const witRows = keep(['spending key', 'the spent note', 'its Merkle path'].map((s, i) => CT(witC, 34, 130 + 52 * i, s, {size: 24})));
-const witNote = keep(CT(witC, 34, 276, 'stays in the wallet', {size: 21, fill: C.dim}));
-const know = keep(Txt(800, 650, 'a valid proof shows someone <b>knows</b> a witness, not only that one exists', {size: 27, anchor: 'middle'}));
+/* 3. The problem: the contract remembers the code */
+const ctr1 = keep(Card(110, 610, 560, 170, C.grey, {fo: 0.05}));
+const ctr1T = keep(CT(ctr1, 24, 50, 'pool contract', {size: 28}));
+const ctr1R = keep(CT(ctr1, 24, 112, 'remembers', {size: 22, fill: C.dim}));
+const ctr1Chip = keep(MC(ctr1, 330, 104, 'code fingerprint', C.teal, {w: 250, size: 22}));
+const ctr1A = keep(Arrow(572, 714, 800, LY + LH + 10, C.teal, {bend: 70}));
+const lk1 = keep(Lock(...at(codeC, 340, 44), C.red, {parent: codeC, k: 1.2}));
+const lk2 = keep(Lock(...at(machC, 360, 44), C.red, {parent: machC, k: 1.2}));
+const fixedT = keep(Txt(1060, 500, 'code and machine fixed', {size: 30, fill: C.red, anchor: 'middle'}));
+const fixedT2 = keep(Txt(1060, 542, 'for the life of the contract', {size: 22, fill: C.dim, anchor: 'middle'}));
 beat(2, 13, (t) => {
-  clear(t);
-  A.write(relT, t + 0.6, 1.2);
-  A.draw(pubC, t + 1.8, 1.0); A.write(pubT, t + 2.2, 0.7); A.fadeIn(pubRows, t + 2.8, 0.5, {lag: 0.4, dx: -10}); A.fadeIn(pubNote, t + 4.2, 0.5);
-  A.draw(witC, t + 4.8, 1.0); A.write(witT, t + 5.2, 0.7); A.fadeIn(witL, t + 5.6, 0.4); A.fadeIn(witRows, t + 5.8, 0.5, {lag: 0.4, dx: -10}); A.fadeIn(witNote, t + 7.2, 0.5);
-  A.write(know, t + 8.4, 1.4);
+  A.fadeOut([lProof, lA3, ...under], t, 0.5);
+  A.draw(ctr1, t + 0.8, 1.0); A.write(ctr1T, t + 1.2, 0.6); A.fadeIn(ctr1R, t + 1.8, 0.4); A.fadeIn(ctr1Chip, t + 2.2, 0.5, {s0: 0.6});
+  A.draw(ctr1A, t + 3.2, 0.9);
+  A.fadeIn([lk1, lk2], t + 5.0, 0.5, {lag: 0.3}); A.pulse([lk1, lk2], t + 5.8, 0.7, 1.3);
+  A.write(fixedT, t + 6.6, 1.0); A.fadeIn(fixedT2, t + 7.6, 0.5);
 });
 
-/* 5. Two kinds of proof */
-const lp = keep(Card(90, 140, 680, 600, C.purple));
-const lpT = keep(CT(lp, 340, 62, 'Lean proof', {size: 38, fill: C.purple, anchor: 'middle'}));
-const lpDoc = keep(LeanDoc(...at(lp, 340, 180), {parent: lp}));
-const vp = keep(Card(830, 140, 680, 600, C.gold));
-const vpT = keep(CT(vp, 340, 62, 'leanVM proof', {size: 38, fill: C.gold, anchor: 'middle'}));
-const vpBadge = keep(Stark(...at(vp, 340, 180), '<b>STARK</b>', {parent: vp, k: 1.3}));
-const LROWS = [['what', 'a mathematical proof'], ['says', 'this code obeys the rules,'], ['', 'for every possible input'], ['made', 'once per piece of code'], ['size', 'large, up to gigabytes'], ['checked by', 'the Lean checker']];
-const VROWS = [['what', 'a cryptographic proof'], ['says', 'this one run was correct'], ['', ''], ['made', 'every transaction'], ['size', 'about 200 KB, checked in ms'], ['checked by', 'mempool nodes, the block proof']];
-const lRows = keep(LROWS.map(([a, b], i) => Row(lp, 300 + 46 * i, a, b, 190, {size: 24, lx: 40})));
-const vRows = keep(VROWS.map(([a, b], i) => Row(vp, 300 + 46 * i, a, b, 190, {size: 24, lx: 40})));
-const certLine = keep(Txt(800, 820, 'the certificate is a leanVM proof <b>about</b> a Lean proof', {size: 28, anchor: 'middle'}));
-beat(3, 19, (t) => {
+/* 4. Machines differ */
+const winT = keep(Txt(800, 120, 'two kinds of proving machine, each faster at different work', {size: 34, anchor: 'middle'}));
+const keyR = keep(Tag(560, 190, 'RISC-V program  ·  proved by leanVM', C.teal, {size: 20}));
+const keyC = keep(Tag(1050, 190, 'circuit  ·  proved by leanR1CS', C.green, {size: 20}));
+const BX = 540, BW = 820;
+const bars = [
+  {label: 'hashing', sub: 'a Merkle path', y: 340, a: 0.074, b: 0.024, verdict: 'circuit about 3× faster', vc: C.green},
+  {label: 'arithmetic', sub: 'a Falcon signature', y: 580, a: 0.53, b: 5.88, verdict: 'RISC-V about 11× faster', vc: C.teal},
+].map((r) => {
+  const mx = Math.max(r.a, r.b), wa = Math.max(BW * r.a / mx, 6), wb = Math.max(BW * r.b / mx, 6);
+  const o = {
+    lab: Txt(490, r.y - 4, r.label, {size: 30, anchor: 'end'}), sub: Txt(490, r.y + 30, r.sub, {size: 20, anchor: 'end', fill: C.dim}),
+    ba: Card(BX, r.y - 46, wa, 36, C.teal, {fo: 0.35, r: 6, sw: 2}), bb: Card(BX, r.y + 8, wb, 36, C.green, {fo: 0.35, r: 6, sw: 2}),
+    ta: Txt(BX + wa + 14, r.y - 20, `${r.a} s`, {size: 21, fill: C.teal}), tb: Txt(BX + wb + 14, r.y + 34, `${r.b} s`, {size: 21, fill: C.green}),
+    v: Txt(BX + BW / 2, r.y + 100, r.verdict, {size: 27, anchor: 'middle', fill: r.vc}),
+  };
+  keep(Object.values(o));
+  return o;
+});
+const foot = keep(Txt(800, 830, 'time for a wallet to make the proof  ·  development measurements', {size: 19, anchor: 'middle', fill: C.faint}));
+beat(2, 15, (t) => {
   clear(t);
-  A.draw(lp, t + 0.6, 1.0); A.write(lpT, t + 1.0, 0.8); A.fadeIn(lpDoc, t + 1.6, 0.6, {dy: 10});
-  A.fadeIn(lRows, t + 2.6, 0.5, {lag: 0.55, dx: -10});
-  A.draw(vp, t + 6.6, 1.0); A.write(vpT, t + 7.0, 0.8); A.fadeIn(vpBadge, t + 7.6, 0.6, {s0: 0.6});
-  A.fadeIn(vRows, t + 8.6, 0.5, {lag: 0.55, dx: -10});
-  A.write(certLine, t + 14.4, 1.4);
+  A.write(winT, t + 0.6, 1.2); A.fadeIn([keyR, keyC], t + 1.8, 0.5, {lag: 0.3});
+  bars.forEach((r, i) => {
+    const s = t + 3.0 + i * 4.2;
+    A.fadeIn([r.lab, r.sub], s, 0.5, {dx: -10});
+    A.draw(r.ba, s + 0.5, 0.9); A.fadeIn(r.ta, s + 1.3, 0.4);
+    A.draw(r.bb, s + 1.0, 0.9); A.fadeIn(r.tb, s + 1.8, 0.4);
+    A.fadeIn(r.v, s + 2.6, 0.6, {dy: 8});
+  });
+  A.fadeIn(foot, t + 11.6, 0.6);
 });
 
-/* 6. Certify: the Lean checker */
-const inSpec = keep(Chip(250, 230, 'Spend  ·  spec_id', C.blue, {size: 23}));
-const inCode = keep(Chip(250, 410, 'RISC-V image  ·  impl_id', C.teal, {size: 23}));
-const inDoc = keep(LeanDoc(250, 600, {w: 80, h: 104}));
-const inDocL = keep(Txt(250, 690, 'Lean proof', {size: 23, fill: C.purple, anchor: 'middle'}));
-const thm = keep(Txt(800, 150, '<m>∀</m> pub w adv,  Run  impl  pub  w  adv  →  <m>R</m>  pub  w', {size: 30, anchor: 'middle', fill: C.purple}));
-const chk = keep(Card(560, 250, 600, 420, C.ink, {fo: 0.04}));
-const chkT = keep(CT(chk, 300, 52, 'Lean checker', {size: 32, anchor: 'middle'}));
-const chkS = keep(CT(chk, 300, 90, 'Lean’s kernel + nanoda  ·  approved by the fork', {size: 20, fill: C.dim, anchor: 'middle'}));
-const CHK = ['pinned basic definitions, nothing redefined', 'the checker writes the statement itself', 'only three standard axioms', 'both kernels accept'];
-const chkRows = keep(CHK.map((s, i) => [Check(...at(chk, 50, 158 + 58 * i), C.green, {parent: chk, k: 0.8}), CT(chk, 80, 166 + 58 * i, s, {size: 23})]));
-const ai = keep([Arrow(400, 240, 552, 330, C.blue, {bend: -16}), Arrow(430, 410, 552, 440, C.teal), Arrow(300, 600, 552, 560, C.purple, {bend: 16})]);
-const yes = keep(Stamp(1340, 460, 'yes', C.green, {size: 40, w: 150}));
-const aYes = keep(Arrow(1168, 460, 1258, 460, C.green));
-beat(4, 18, (t) => {
+/* 5. The idea: remember the rules (one diagram, built up over steps 5 to 9) */
+const ctr2 = keep(Card(60, 140, 430, 170, C.grey, {fo: 0.05}));
+const ctr2T = keep(CT(ctr2, 24, 50, 'pool contract', {size: 28}));
+const ctr2R = keep(CT(ctr2, 24, 112, 'remembers', {size: 22, fill: C.dim}));
+const ctr2Chip = keep(MC(ctr2, 290, 104, 'rules fingerprint', C.blue, {w: 230, size: 21}));
+const rules2 = keep(Card(600, 110, 560, 240, C.blue));
+const rules2T = keep(CT(rules2, 26, 48, 'rules, written in Lean', {size: 28, fill: C.blue}));
+const rules2L = keep(['<k=blue>def</k> ValidPayment (pub w) : Prop :=', '  owns w ∧ unspent pub w ∧', '  balanced pub w'].map((s, i) => CT(rules2, 32, 110 + 40 * i, `<c>${s}</c>`, {size: 21})));
+const ctr2A = keep(Arrow(496, 230, 592, 230, C.blue));
+const codeR = keep(Card(250, 560, 440, 130, C.teal));
+const codeRT = keep(CT(codeR, 220, 56, 'RISC-V program', {size: 28, fill: C.teal, anchor: 'middle'}));
+const codeRS = keep(CT(codeR, 220, 98, 'proved by leanVM', {size: 21, fill: C.dim, anchor: 'middle'}));
+const codeK = keep(Card(910, 560, 440, 130, C.green));
+const codeKT = keep(CT(codeK, 220, 56, 'circuit', {size: 28, fill: C.green, anchor: 'middle'}));
+const codeKS = keep(CT(codeK, 220, 98, 'proved by leanR1CS', {size: 21, fill: C.dim, anchor: 'middle'}));
+const P1 = [790, 356], P2 = [1010, 356], Q1 = [470, 554], Q2 = [1130, 554];
+const link1 = keep(Line(...P1, ...Q1, C.faint, {dash: '6 6'}));
+const link2 = keep(Line(...P2, ...Q2, C.faint, {dash: '6 6'}));
+const M1 = [(P1[0] + Q1[0]) / 2, (P1[1] + Q1[1]) / 2], M2 = [(P2[0] + Q2[0]) / 2, (P2[1] + Q2[1]) / 2];
+const anyT = keep(Txt(800, 780, 'any code that follows the rules will do, on any machine', {size: 27, anchor: 'middle'}));
+const diag = [ctr2, ctr2T, ctr2R, ctr2Chip, rules2, rules2T, rules2L, ctr2A, codeR, codeRT, codeRS, codeK, codeKT, codeKS, link1, link2];
+beat(3, 18, (t) => {
   clear(t);
-  A.fadeIn(inSpec, t + 0.6, 0.5, {dx: -16}); A.fadeIn(inCode, t + 1.2, 0.5, {dx: -16}); A.fadeIn([inDoc, inDocL], t + 1.8, 0.5, {dx: -16});
-  A.write(thm, t + 2.6, 1.6);
-  A.draw(chk, t + 4.4, 1.0); A.write(chkT, t + 4.8, 0.7); A.fadeIn(chkS, t + 5.3, 0.5);
-  A.draw(ai, t + 5.8, 0.8, {lag: 0.25});
-  chkRows.forEach(([c, s], i) => { A.draw(c, t + 7.4 + i * 1.6, 0.4); A.fadeIn(s, t + 7.5 + i * 1.6, 0.5, {dx: -8}); });
-  A.draw(aYes, t + 14.2, 0.6); A.fadeIn(yes, t + 14.6, 0.4, {s0: 1.6}); A.pulse(yes, t + 15.0, 0.6, 1.15);
+  A.draw(ctr2, t + 0.8, 1.0); A.write(ctr2T, t + 1.2, 0.6); A.fadeIn(ctr2R, t + 1.8, 0.4);
+  A.fadeIn(ctr2Chip, t + 2.3, 0.6, {s0: 0.5}); A.pulse(ctr2Chip, t + 3.0, 0.7, 1.15);
+  A.draw(ctr2A, t + 4.0, 0.5); A.draw(rules2, t + 4.3, 1.0); A.write(rules2T, t + 4.7, 0.7);
+  rules2L.forEach((r, i) => A.write(r, t + 5.6 + i * 0.8, 0.9));
+  A.draw(codeR, t + 9.0, 1.0); A.write(codeRT, t + 9.4, 0.6); A.fadeIn(codeRS, t + 9.9, 0.4);
+  A.draw(codeK, t + 10.4, 1.0); A.write(codeKT, t + 10.8, 0.6); A.fadeIn(codeKS, t + 11.3, 0.4);
+  A.draw([link1, link2], t + 12.2, 0.8);
+  A.write(anyT, t + 13.4, 1.2);
 });
 
-/* 7. Certify: the certificate, and where things live */
-const cert = keep(Card(520, 130, 560, 300, C.gold, {fo: 0.08}));
-const certT = keep(CT(cert, 280, 56, 'certificate', {size: 34, fill: C.gold, anchor: 'middle'}));
-const certS = keep(CT(cert, 280, 94, 'a leanVM proof that the checker said yes', {size: 21, fill: C.dim, anchor: 'middle'}));
-const certRows = keep([['spec', '<c>spec_id</c>'], ['code', '<c>impl_id</c>'], ['machine model', '<c>model_version</c>'], ['Lean proof', '<c>export_hash</c>']].map(([a, b], i) => Row(cert, 150 + 38 * i, a, b, 250, {size: 22, lx: 60})));
-const proveA = keep(Arrow(800, 60, 800, 122, C.gold));
-const proveL = keep(Txt(820, 98, 'leanVM proves the checker’s run', {size: 21, fill: C.gold}));
-const ch2 = keep(Card(60, 520, 700, 300, C.yellow, {fo: 0.035, sw: 2, dash: '8 6'}));
-const ch2T = keep(CT(ch2, 24, 44, 'on chain', {size: 26, fill: C.yellow}));
-const ch2Rows = keep([Chip(...at(ch2, 350, 130), 'the rules  (spec)', C.blue, {parent: ch2, size: 23}), Chip(...at(ch2, 350, 210), 'the code  (stored once)', C.teal, {parent: ch2, size: 23})]);
-const off2 = keep(Card(840, 520, 700, 300, C.grey, {fo: 0.03, sw: 2, dash: '8 6'}));
-const off2T = keep(CT(off2, 24, 44, 'off chain', {size: 26, fill: C.dim}));
-const offDoc = keep(LeanDoc(...at(off2, 200, 160), {parent: off2, w: 64, h: 84}));
-const offDocL = keep(CT(off2, 200, 250, 'Lean proof', {size: 22, fill: C.purple, anchor: 'middle'}));
-const offCert = keep(Stark(...at(off2, 480, 150), 'certificate', {parent: off2}));
-const offCertL = keep(CT(off2, 480, 250, 'travels with transactions', {size: 20, fill: C.dim, anchor: 'middle'}));
-const approved = keep(Txt(1110, 290, '<c>checker_id</c> on the fork’s', {size: 21, fill: C.dim}));
-const approved2 = keep(Txt(1110, 318, 'approved list', {size: 21, fill: C.dim}));
-beat(4, 16, (t) => {
-  clear(t);
-  A.draw(proveA, t + 0.6, 0.6); A.fadeIn(proveL, t + 0.8, 0.5);
-  A.draw(cert, t + 1.2, 1.0); A.write(certT, t + 1.6, 0.7); A.fadeIn(certS, t + 2.1, 0.5);
-  A.fadeIn(certRows, t + 2.8, 0.5, {lag: 0.5, dx: -10});
-  A.fadeIn([approved, approved2], t + 5.2, 0.6);
-  A.draw(ch2, t + 7.2, 1.0); A.fadeIn(ch2T, t + 7.6, 0.4); A.fadeIn(ch2Rows, t + 8.0, 0.5, {lag: 0.6, s0: 0.7});
-  A.draw(off2, t + 9.6, 1.0); A.fadeIn(off2T, t + 10.0, 0.4); A.fadeIn([offDoc, offDocL], t + 10.4, 0.5); A.fadeIn([offCert, offCertL], t + 11.2, 0.5, {s0: 0.7});
+/* 6. The question */
+const q1 = keep(Txt(M1[0], M1[1] + 14, '?', {size: 54, anchor: 'middle', fill: C.yellow}));
+const q2 = keep(Txt(M2[0], M2[1] + 14, '?', {size: 54, anchor: 'middle', fill: C.yellow}));
+const qT = keep(Txt(800, 780, 'how do we know a piece of code follows the rules?', {size: 30, anchor: 'middle', fill: C.yellow}));
+beat(3, 7, (t) => {
+  A.fadeOut(anyT, t, 0.5);
+  A.fadeIn([q1, q2], t + 0.6, 0.5, {s0: 0.4, lag: 0.3}); A.pulse([q1, q2], t + 1.6, 0.7, 1.25);
+  A.write(qT, t + 2.2, 1.3);
 });
 
-/* 8. A transaction */
-const wal = keep(Card(60, 120, 520, 560, C.grey, {fo: 0.04}));
-const walT = keep(CT(wal, 24, 48, 'Alice’s wallet', {size: 28, fill: C.dim}));
-const walQ = keep(CT(wal, 24, 104, 'certified code for <c>spec_id</c>:', {size: 22}));
-const optR = keep(MC(wal, 260, 170, 'RISC-V  ·  0.15 s', C.teal, {w: 330, size: 23}));
-const optC = keep(MC(wal, 260, 236, 'circuit  ·  0.04 s', C.green, {w: 330, size: 23}));
-const pick = keep(Check(...at(wal, 460, 236), C.green, {parent: wal}));
-const walProof = keep(Stark(...at(wal, 260, 340), '<b>STARK</b>', {parent: wal}));
-const walProofL = keep(CT(wal, 260, 396, 'this code accepted these inputs', {size: 21, fill: C.dim, anchor: 'middle'}));
-const walCert = keep(Stark(...at(wal, 260, 470), 'certificate', {parent: wal}));
-const walSmall = keep(CT(wal, 260, 530, 'shielded spend, development runs', {size: 17, fill: C.faint, anchor: 'middle'}));
-const txc = keep(Card(700, 120, 840, 250, C.yellow, {fo: 0.04, dash: '7 5'}));
-const txT = keep(CT(txc, 24, 46, 'transaction', {size: 28, fill: C.yellow}));
-const txDep = keep(CT(txc, 40, 116, 'dependency   <c>(SPEC_V1, data_hash, spec_id)</c>', {size: 24}));
-const txHash = keep(CT(txc, 40, 170, '<c>data_hash = H(pub)</c>', {size: 24}));
-const txSide = keep(CT(txc, 40, 220, 'proof and certificate travel beside it', {size: 20, fill: C.dim}));
-const aTx = keep(Arrow(582, 360, 692, 250, C.gold, {bend: 20}));
-const ctr = keep(Card(700, 450, 840, 230, C.grey, {fo: 0.05}));
-const ctrT = keep(CT(ctr, 24, 48, 'pool contract  (EVM)', {size: 28}));
-const ctrRows = keep(['the dependency names my <c>spec_id</c>', '<c>data_hash</c> matches the public inputs'].map((s, i) => [Check(...at(ctr, 52, 108 + 50 * i), C.green, {parent: ctr, k: 0.8}), CT(ctr, 82, 116 + 50 * i, s, {size: 24})]));
-const ctrNo = keep(CT(ctr, 52, 206, 'no proof is verified in the EVM', {size: 21, fill: C.dim}));
+/* 7. A Lean proof */
+const doc1 = keep(LeanDoc(M1[0], M1[1] - 6));
+const doc2 = keep(LeanDoc(M2[0], M2[1] - 6));
+const docL = keep(Txt(M1[0] + 4, M1[1] + 66, 'Lean proof', {size: 21, fill: C.purple, anchor: 'middle'}));
+const docL2 = keep(Txt(M2[0] + 4, M2[1] + 66, 'Lean proof', {size: 21, fill: C.purple, anchor: 'middle'}));
+const ck1 = keep(Check(M1[0] + 50, M1[1] - 20, C.green, {k: 0.8}));
+const ck2 = keep(Check(M2[0] + 50, M2[1] - 20, C.green, {k: 0.8}));
+const thm = keep(Txt(800, 770, 'for every possible input:  if the code accepts, the rules hold', {size: 29, anchor: 'middle', fill: C.purple}));
+const thm2 = keep(Txt(800, 816, 'verified once by the Lean checker', {size: 22, anchor: 'middle', fill: C.dim}));
+beat(4, 15, (t) => {
+  A.fadeOut([q1, q2, qT], t, 0.5);
+  A.fadeIn([doc1, doc2], t + 0.8, 0.6, {s0: 0.5, lag: 0.3}); A.fadeIn([docL, docL2], t + 1.6, 0.5);
+  A.write(thm, t + 3.0, 1.6);
+  A.fadeIn(thm2, t + 6.6, 0.5); A.draw([ck1, ck2], t + 7.4, 0.4, {lag: 0.3});
+  A.to([link1, link2], t + 8.4, 0.6, {o: 0.6});
+});
+
+/* 8. Two kinds of proof */
+const twoT = keep(Txt(800, 110, 'two kinds of proof', {size: 40, anchor: 'middle'}));
+const lpC = keep(Card(120, 180, 640, 470, C.purple));
+const lpT = keep(CT(lpC, 320, 60, 'Lean proof', {size: 34, fill: C.purple, anchor: 'middle'}));
+const lpI = keep(LeanDoc(...at(lpC, 320, 150), {parent: lpC, w: 66, h: 84}));
+const ppC = keep(Card(840, 180, 640, 470, C.gold));
+const ppT = keep(CT(ppC, 320, 60, 'payment proof', {size: 34, fill: C.gold, anchor: 'middle'}));
+const ppI = keep(Stark(...at(ppC, 320, 150), 'proof', {parent: ppC, k: 1.3}));
+const ROWS = [['about', 'the code, for all inputs', 'one payment'], ['made', 'once per piece of code', 'every time'], ['size', 'large', 'small, checked in ms'], ['checked by', 'the Lean checker', 'Ethereum nodes']];
+const twoRows = keep(ROWS.map(([k, a, b], i) => [Row(lpC, 270 + 48 * i, k, a, 210, {size: 25, lx: 50}), Row(ppC, 270 + 48 * i, k, b, 210, {size: 25, lx: 50})]));
+beat(4, 13, (t) => {
+  clear(t);
+  A.write(twoT, t + 0.6, 0.9);
+  A.draw(lpC, t + 1.4, 1.0); A.fadeIn([lpT, lpI], t + 1.8, 0.5);
+  A.draw(ppC, t + 1.8, 1.0); A.fadeIn([ppT, ppI], t + 2.2, 0.5);
+  twoRows.forEach(([a, b], i) => { A.fadeIn(a, t + 3.4 + i * 1.6, 0.5, {dx: -8}); A.fadeIn(b, t + 3.8 + i * 1.6, 0.5, {dx: -8}); });
+});
+
+/* 9. Certificates, and what is stored where */
+const cert1 = keep(Stark(M1[0] - 150, M1[1] - 6, 'certificate'));
+const cert2 = keep(Stark(M2[0] + 150, M2[1] - 6, 'certificate'));
+const certT = keep(Txt(800, 770, 'certificate  =  leanVM’s proof that the Lean checker said yes', {size: 28, anchor: 'middle', fill: C.gold}));
+const onT1 = keep(Tag(1090, 140, 'on chain', C.yellow));
+const onT2 = keep(Tag(630, 584, 'on chain', C.yellow));
+const onT3 = keep(Tag(1290, 584, 'on chain', C.yellow));
+const offT = keep(Txt(800, 826, 'Lean proofs and certificates stay off chain', {size: 22, anchor: 'middle', fill: C.dim}));
+beat(4, 15, (t) => {
+  clear(t);
+  showAgain([...diag, doc1, doc2, docL, docL2, ck1, ck2], t + 0.7, 0.6);
+  A.fadeIn([cert1, cert2], t + 2.2, 0.6, {s0: 0.5, lag: 0.3}); A.pulse([cert1, cert2], t + 3.0, 0.7, 1.15);
+  A.write(certT, t + 3.8, 1.4);
+  A.fadeIn([onT1, onT2, onT3], t + 8.4, 0.5, {lag: 0.3});
+  A.fadeIn(offT, t + 10.0, 0.6);
+});
+
+/* 10. A payment: the wallet, the transaction, the contract */
+const wal = keep(Card(60, 120, 520, 600, C.blue, {fo: 0.04}));
+const walT = keep(CT(wal, 26, 50, 'Alice’s wallet', {size: 30, fill: C.blue}));
+const walQ = keep(CT(wal, 26, 108, 'certified code for these rules', {size: 22, fill: C.dim}));
+const optR = keep(MC(wal, 250, 170, 'RISC-V  ·  0.15 s', C.teal, {w: 320, size: 23}));
+const optK = keep(MC(wal, 250, 236, 'circuit  ·  0.04 s', C.green, {w: 320, size: 23}));
+const pick = keep(Check(...at(wal, 450, 236), C.green, {parent: wal}));
+const pickL = keep(CT(wal, 250, 290, 'uses the faster one', {size: 21, fill: C.dim, anchor: 'middle'}));
+const walP = keep(Stark(...at(wal, 150, 400), 'proof', {parent: wal}));
+const walPL = keep(CT(wal, 150, 450, 'payment proof', {size: 21, fill: C.dim, anchor: 'middle'}));
+const walC = keep(Stark(...at(wal, 370, 400), 'certificate', {parent: wal}));
+const walCL = keep(CT(wal, 370, 450, 'of the circuit', {size: 21, fill: C.dim, anchor: 'middle'}));
+const tx2 = keep(Card(680, 120, 860, 250, C.yellow, {fo: 0.04, dash: '7 5'}));
+const tx2T = keep(CT(tx2, 24, 46, 'transaction', {size: 28, fill: C.yellow}));
+const tx2R = keep([['rules fingerprint', '<c>spec_id</c>'], ['public inputs fingerprint', '<c>data_hash</c>']].map(([a, b], i) => Row(tx2, 110 + 46 * i, a, b, 380, {size: 24, lx: 40})));
+const tx2S = keep(CT(tx2, 40, 216, 'beside it: the payment proof and the certificate', {size: 21, fill: C.dim}));
+const aW = keep(Arrow(586, 400, 672, 290, C.yellow, {bend: 18}));
+const ctr3 = keep(Card(680, 450, 860, 270, C.grey, {fo: 0.05}));
+const ctr3T = keep(CT(ctr3, 24, 50, 'pool contract', {size: 28}));
+const ctr3R = keep(['the rules fingerprint is mine', 'the public inputs match'].map((s, i) => [Check(...at(ctr3, 52, 112 + 54 * i), C.green, {parent: ctr3, k: 0.85}), CT(ctr3, 84, 120 + 54 * i, s, {size: 25})]));
+const ctr3N = keep(CT(ctr3, 52, 230, 'it never looks at code or machines', {size: 22, fill: C.dim}));
+const aX = keep(Arrow(1110, 376, 1110, 444, C.yellow));
 beat(5, 18, (t) => {
   clear(t);
-  A.draw(wal, t + 0.6, 1.0); A.fadeIn(walT, t + 1.0, 0.5); A.fadeIn(walQ, t + 1.6, 0.5);
-  A.fadeIn(optR, t + 2.3, 0.5, {dx: -10}); A.fadeIn(optC, t + 2.8, 0.5, {dx: -10}); A.draw(pick, t + 3.8, 0.4); A.pulse(optC, t + 4.0, 0.7, 1.08); A.fadeIn(walSmall, t + 4.0, 0.5);
-  A.fadeIn(walProof, t + 5.0, 0.5, {s0: 0.6}); A.fadeIn(walProofL, t + 5.4, 0.5); A.fadeIn(walCert, t + 6.2, 0.5, {s0: 0.6});
-  A.draw(txc, t + 7.2, 1.0); A.fadeIn(txT, t + 7.6, 0.4); A.write(txDep, t + 8.0, 1.2); A.write(txHash, t + 9.0, 0.9); A.fadeIn(txSide, t + 9.8, 0.5); A.draw(aTx, t + 9.9, 0.7);
-  A.draw(ctr, t + 11.0, 1.0); A.write(ctrT, t + 11.4, 0.7);
-  ctrRows.forEach(([c, s], i) => { A.draw(c, t + 12.4 + i * 1.4, 0.4); A.fadeIn(s, t + 12.5 + i * 1.4, 0.5, {dx: -8}); });
-  A.fadeIn(ctrNo, t + 15.4, 0.6);
+  A.draw(wal, t + 0.6, 1.0); A.write(walT, t + 1.0, 0.6); A.fadeIn(walQ, t + 1.5, 0.5);
+  A.fadeIn(optR, t + 2.2, 0.5, {dx: -10}); A.fadeIn(optK, t + 2.7, 0.5, {dx: -10});
+  A.draw(pick, t + 3.6, 0.4); A.pulse(optK, t + 3.8, 0.7, 1.08); A.fadeIn(pickL, t + 4.0, 0.5);
+  A.fadeIn([walP, walPL], t + 5.0, 0.5, {s0: 0.7}); A.fadeIn([walC, walCL], t + 5.8, 0.5, {s0: 0.7});
+  A.draw(aW, t + 7.0, 0.6); A.draw(tx2, t + 7.3, 1.0); A.fadeIn(tx2T, t + 7.7, 0.4);
+  A.fadeIn(tx2R, t + 8.2, 0.5, {lag: 0.8, dx: -10}); A.fadeIn(tx2S, t + 9.8, 0.5);
+  A.draw(aX, t + 11.0, 0.5); A.draw(ctr3, t + 11.3, 1.0); A.write(ctr3T, t + 11.7, 0.6);
+  ctr3R.forEach(([c, s], i) => { A.draw(c, t + 12.6 + i * 1.3, 0.4); A.fadeIn(s, t + 12.7 + i * 1.3, 0.5, {dx: -8}); });
+  A.fadeIn(ctr3N, t + 15.4, 0.6);
 });
 
-/* 9. A mempool node */
-const mp = keep(Card(300, 130, 1000, 520, C.purple, {fo: 0.05}));
-const mpT = keep(CT(mp, 500, 56, 'mempool node', {size: 34, fill: C.purple, anchor: 'middle'}));
-const MPC = [['transaction proof is valid', C.gold], ['certificate is valid, from an approved checker', C.gold], ['same code, same spec, same public inputs', C.ink], ['the code is stored on chain', C.yellow]];
-const mpRows = keep(MPC.map(([s, c], i) => [Check(...at(mp, 90, 150 + 78 * i), C.green, {parent: mp}), CT(mp, 130, 160 + 78 * i, s, {size: 28, fill: c})]));
-const mpCache = keep(CT(mp, 500, 480, 'certificates are checked once and cached', {size: 21, fill: C.dim, anchor: 'middle'}));
-const fwd = keep(Arrow(1310, 390, 1470, 390, C.purple));
-const fwdL = keep(Txt(1390, 370, 'forward', {size: 21, fill: C.dim, anchor: 'middle'}));
-beat(5, 14, (t) => {
+/* 11. The network: nodes, builder, validators */
+const NY = 250, NH = 400;
+const nTx = keep([Stark(130, 410, 'proof', {k: 0.85}), Stark(130, 460, 'certificate', {k: 0.85})]);
+const nTxL = keep(Txt(130, 520, 'a transaction’s', {size: 19, fill: C.dim, anchor: 'middle'}));
+const nTxL2 = keep(Txt(130, 544, 'proofs', {size: 19, fill: C.dim, anchor: 'middle'}));
+const node = keep(Card(270, NY, 420, NH, C.purple, {fo: 0.04}));
+const nodeT = keep(CT(node, 210, 56, 'mempool nodes', {size: 30, fill: C.purple, anchor: 'middle'}));
+const nodeR = keep(['payment proof valid', 'certificate valid', 'same code, same rules'].map((s, i) => [Check(...at(node, 46, 140 + 70 * i), C.green, {parent: node, k: 0.85}), CT(node, 78, 148 + 70 * i, s, {size: 25})]));
+const build = keep(Card(770, NY, 420, NH, C.gold, {fo: 0.04}));
+const buildT = keep(CT(build, 210, 56, 'builder', {size: 30, fill: C.gold, anchor: 'middle'}));
+const buildS = keep(CT(build, 210, 96, 'merges every proof in the block', {size: 21, fill: C.dim, anchor: 'middle'}));
+const many = keep([0, 1, 2, 3, 4].map((i) => Stark(870 + 0, NY + 150 + 0 * i, 'proof', {k: 0.7})));
+const one = keep(Stark(980, NY + 330, '<b>block proof</b>', {k: 1.05}));
+const val = keep(Card(1270, NY, 290, NH, C.blue, {fo: 0.04}));
+const valT = keep(CT(val, 145, 56, 'validators', {size: 30, fill: C.blue, anchor: 'middle'}));
+const valC = keep(Check(...at(val, 145, 180), C.green, {parent: val, k: 1.4}));
+const valS = keep(CT(val, 145, 250, 'check one proof', {size: 24, anchor: 'middle'}));
+const valS2 = keep(CT(val, 145, 284, 'for the whole block', {size: 21, fill: C.dim, anchor: 'middle'}));
+const nA = keep([Arrow(200, 435, 262, 435, C.dim), Arrow(696, 435, 762, 435, C.dim), Arrow(1196, 435, 1262, 435, C.dim)]);
+beat(5, 17, (t) => {
   clear(t);
-  A.draw(mp, t + 0.6, 1.0); A.write(mpT, t + 1.0, 0.8);
-  mpRows.forEach(([c, s], i) => { A.draw(c, t + 2.2 + i * 1.8, 0.4); A.fadeIn(s, t + 2.3 + i * 1.8, 0.5, {dx: -10}); });
-  A.fadeIn(mpCache, t + 9.8, 0.6); A.draw(fwd, t + 10.8, 0.7); A.fadeIn(fwdL, t + 11.2, 0.5);
-});
-
-/* 10. The builder: one proof for the block */
-const tiles = keep([[150, 200, C.teal], [150, 300, C.green], [150, 400, C.teal], [150, 500, C.green], [150, 600, C.teal]].map(([x, y, c]) => Stark(x, y, 'tx', {w: 80, k: 0.9})));
-const tileCol = [C.teal, C.green, C.teal, C.green, C.teal];
-const bld = keep(Card(330, 120, 900, 600, C.gold, {fo: 0.04}));
-const bldT = keep(CT(bld, 450, 52, 'builder  ·  one leanVM proof for the block', {size: 30, fill: C.gold, anchor: 'middle'}));
-const vR = keep(MC(bld, 230, 170, 'RISC-V verifier  ·  any program', C.teal, {w: 380, size: 22}));
-const vC = keep(MC(bld, 670, 170, 'R1CS verifier  ·  any circuit', C.green, {w: 360, size: 22}));
-const vK = keep(MC(bld, 450, 250, 'checker  ·  certificates', C.gold, {w: 330, size: 22}));
-const stepT = keep(CT(bld, 450, 340, 'for each transaction', {size: 23, fill: C.dim, anchor: 'middle'}));
-const stepRows = keep(['certificate from an approved checker', 'its <c>spec_id</c> is the one the contract named', 'the proof is for the certificate’s code'].map((s, i) => [Check(...at(bld, 170, 392 + 48 * i), C.green, {parent: bld, k: 0.75}), CT(bld, 200, 400 + 48 * i, s, {size: 23})]));
-const claimOut = keep(MC(bld, 450, 560, '<c>(SPEC_V1, data_hash, spec_id)</c>', C.blue, {w: 520, size: 22}));
-const blockProof = keep(Stark(1400, 420, '<b>block proof</b>', {k: 1.2}));
-const aBlock = keep(Arrow(1238, 420, 1318, 420, C.gold));
-beat(6, 18, (t) => {
-  clear(t);
-  A.fadeIn(tiles, t + 0.6, 0.4, {lag: 0.2, dx: -30});
-  tiles.forEach((m, i) => { m.inner.querySelector('text').setAttribute('fill', tileCol[i]); });
-  A.draw(bld, t + 1.8, 1.0); A.write(bldT, t + 2.2, 0.9);
-  A.fadeIn(vR, t + 3.6, 0.5, {s0: 0.7}); A.fadeIn(vC, t + 4.2, 0.5, {s0: 0.7}); A.fadeIn(vK, t + 4.8, 0.5, {s0: 0.7});
-  A.to(tiles, t + 6.0, 1.2, {x: 470, y: 300, o: 0}, {lag: 0.15});
-  A.fadeIn(stepT, t + 7.0, 0.5);
-  stepRows.forEach(([c, s], i) => { A.draw(c, t + 7.8 + i * 1.4, 0.4); A.fadeIn(s, t + 7.9 + i * 1.4, 0.5, {dx: -8}); });
-  A.fadeIn(claimOut, t + 12.4, 0.6, {s0: 0.7});
-  A.draw(aBlock, t + 14.0, 0.6); A.fadeIn(blockProof, t + 14.4, 0.5, {s0: 0.5}); A.pulse(blockProof, t + 15.0, 0.7, 1.15);
-});
-
-/* 11. A validator */
-const val = keep(Card(250, 120, 1100, 470, C.blue, {fo: 0.04}));
-const valT = keep(CT(val, 550, 56, 'validator', {size: 34, fill: C.blue, anchor: 'middle'}));
-const VAL = ['verifies one proof for the whole block', 'checks it covers exactly the block’s dependencies', 'settles one check per distinct piece of code'];
-const valRows = keep(VAL.map((s, i) => [Check(...at(val, 90, 150 + 80 * i), C.green, {parent: val}), CT(val, 130, 160 + 80 * i, s, {size: 29})]));
-const valB = keep(Stark(...at(val, 950, 150), '<b>block proof</b>', {parent: val}));
-const ch3 = keep(Card(250, 660, 1100, 150, C.yellow, {fo: 0.035, sw: 2, dash: '8 6'}));
-const ch3T = keep(CT(ch3, 24, 40, 'on chain', {size: 22, fill: C.yellow}));
-const ch3Code = keep([Chip(...at(ch3, 330, 95), 'RISC-V image', C.teal, {parent: ch3, size: 22}), Chip(...at(ch3, 600, 95), 'circuit', C.green, {parent: ch3, size: 22}), Chip(...at(ch3, 830, 95), 'RISC-V image', C.teal, {parent: ch3, size: 22})]);
-const readA = keep(Arrow(800, 652, 800, 470, C.yellow, {bend: 0}));
-const valMissing = keep(Txt(800, 860, 'needs dynamic key recursion  ·  not built yet  ·  the RISC-V and circuit designs need it too', {size: 20, fill: C.faint, anchor: 'middle'}));
-beat(6, 14, (t) => {
-  clear(t);
-  A.draw(val, t + 0.6, 1.0); A.write(valT, t + 1.0, 0.7); A.fadeIn(valB, t + 1.4, 0.5, {s0: 0.6});
-  valRows.forEach(([c, s], i) => { A.draw(c, t + 2.4 + i * 2.0, 0.4); A.fadeIn(s, t + 2.5 + i * 2.0, 0.5, {dx: -10}); });
-  A.draw(ch3, t + 7.6, 0.9); A.fadeIn(ch3T, t + 7.9, 0.4); A.fadeIn(ch3Code, t + 8.2, 0.5, {lag: 0.3});
-  A.draw(readA, t + 9.6, 0.7);
-  A.fadeIn(valMissing, t + 11.0, 0.6);
+  A.fadeIn([...nTx, nTxL, nTxL2], t + 0.6, 0.5, {lag: 0.2});
+  A.draw(nA[0], t + 1.6, 0.4); A.draw(node, t + 1.8, 1.0); A.write(nodeT, t + 2.2, 0.6);
+  nodeR.forEach(([c, s], i) => { A.draw(c, t + 3.2 + i * 1.3, 0.4); A.fadeIn(s, t + 3.3 + i * 1.3, 0.5, {dx: -8}); });
+  A.draw(nA[1], t + 7.4, 0.4); A.draw(build, t + 7.6, 1.0); A.write(buildT, t + 8.0, 0.6); A.fadeIn(buildS, t + 8.4, 0.5);
+  many.forEach((m, i) => { const x = 850 + 80 * (i % 3), y = NY + 170 + 60 * Math.floor(i / 3); m.base.x = x; m.base.y = y; });
+  A.fadeIn(many, t + 9.0, 0.4, {lag: 0.15, s0: 0.5});
+  A.to(many, t + 10.4, 0.9, {x: 980, y: NY + 330, o: 0}, {lag: 0.08});
+  A.fadeIn(one, t + 11.0, 0.5, {s0: 0.4}); A.pulse(one, t + 11.6, 0.6, 1.15);
+  A.draw(nA[2], t + 12.6, 0.4); A.draw(val, t + 12.8, 1.0); A.write(valT, t + 13.2, 0.6);
+  A.draw(valC, t + 14.0, 0.5); A.fadeIn([valS, valS2], t + 14.3, 0.5);
 });
 
 /* 12. Upgrades */
-const up = keep(Card(500, 60, 600, 120, C.grey, {fo: 0.05}));
-const upT = keep(CT(up, 30, 52, 'pool contract', {size: 28}));
-const upRow = keep(CT(up, 30, 96, 'pins', {size: 22, fill: C.dim}));
-const upChip = keep(MC(up, 190, 88, '<c>spec_id</c>', C.blue, {w: 140, size: 21}));
-const upLock = keep(Lock(...at(up, 540, 60), C.blue, {parent: up, k: 1.3}));
+const up = keep(Card(520, 60, 560, 120, C.grey, {fo: 0.05}));
+const upT = keep(CT(up, 30, 50, 'pool contract', {size: 28}));
+const upChip = keep(MC(up, 140, 92, 'rules fingerprint', C.blue, {w: 220, size: 20}));
+const upLock = keep(Lock(...at(up, 500, 60), C.blue, {parent: up, k: 1.3}));
 const UPS = [
-  [IconPlus, C.teal, 'a better prover, field or hash', 'nothing changes on chain; certificates re-proven off chain if needed'],
-  [IconPlus, C.green, 'a new machine', 'anyone adds faster code and its Lean proof'],
-  [IconFork, C.gold, 'a machine is retired', 'an interpreter proven equivalent runs the old code'],
-  [IconShield, C.red, 'a bug in the checker', 'the fork drops it; code is re-certified'],
+  [IconPlus, C.gold, 'a faster prover', 'nothing to do'],
+  [IconPlus, C.green, 'a new proving machine', 'anyone certifies faster code for it'],
+  [IconFork, C.teal, 'an old machine retired', 'its code keeps running on a newer machine, through an interpreter proven to behave identically'],
+  [IconShield, C.red, 'a bug in the Lean checker', 'Ethereum replaces the checker and code is certified again'],
 ];
 const upRows = UPS.map(([Ic, c, a, b], i) => {
-  const y = 280 + 130 * i;
-  const r = {ic: Ic(170, y, c, 0.9), a: Txt(240, y - 6, a, {size: 28}), b: Txt(240, y + 32, b, {size: 22, fill: C.dim}), ok: Check(1180, y, C.green), okT: Txt(1215, y + 8, 'contract unchanged', {size: 22, fill: C.green})};
+  const y = 270 + 128 * i;
+  const r = {ic: Ic(150, y, c, 0.85), a: Txt(220, y - 6, a, {size: 28}), b: Txt(220, y + 30, b, {size: 21, fill: C.dim}), ok: Check(1300, y, C.green, {k: 0.9}), okT: Txt(1330, y + 8, 'contract unchanged', {size: 21, fill: C.green})};
   keep(Object.values(r));
   return r;
 });
-beat(7, 20, (t) => {
+beat(6, 18, (t) => {
   clear(t);
-  A.draw(up, t + 0.6, 1.0); A.fadeIn([upT, upRow], t + 1.0, 0.5); A.fadeIn(upChip, t + 1.4, 0.5, {s0: 0.6}); A.fadeIn(upLock, t + 1.8, 0.5); A.pulse(upLock, t + 2.3, 0.7, 1.3);
+  A.draw(up, t + 0.6, 1.0); A.fadeIn(upT, t + 1.0, 0.5); A.fadeIn(upChip, t + 1.4, 0.5, {s0: 0.6}); A.fadeIn(upLock, t + 1.8, 0.5);
   upRows.forEach((r, i) => {
-    const s = t + 3.4 + i * 3.6;
-    A.fadeIn(r.ic, s, 0.5, {s0: 0.6}); A.fadeIn(r.a, s + 0.3, 0.5, {dx: -10}); A.fadeIn(r.b, s + 0.9, 0.5);
-    A.draw(r.ok, s + 2.0, 0.4); A.fadeIn(r.okT, s + 2.2, 0.4);
+    const s = t + 3.0 + i * 3.4;
+    A.fadeIn(r.ic, s, 0.5, {s0: 0.6}); A.fadeIn(r.a, s + 0.3, 0.5, {dx: -10}); A.fadeIn(r.b, s + 0.8, 0.5);
+    A.draw(r.ok, s + 1.8, 0.4); A.fadeIn(r.okT, s + 2.0, 0.4);
   });
-  A.pulse(upLock, t + 17.6, 0.8, 1.3);
+  A.pulse(upLock, t + 16.6, 0.8, 1.3);
 });
 
-/* 13. Who bears a failure */
-const fT = keep(Txt(800, 130, 'who bears a failure', {size: 40, anchor: 'middle'}));
-const FAIL = [
-  ['a wrong spec', 'only its own application', C.green, 'as with a contract bug today'],
-  ['code that rejects valid spends', 'only its own application', C.green, 'certify other code'],
-  ['a broken checker or machine', 'every application', C.red, 'the fork fixes it; loss possible before'],
-];
-const fRows = keep(FAIL.map(([a, b, c, d], i) => {
-  const y = 270 + 150 * i;
-  return [Txt(160, y, a, {size: 30}), Txt(900, y, b, {size: 30, fill: c}), Txt(900, y + 40, d, {size: 22, fill: C.dim})];
-}));
-const fNote = keep(Txt(800, 790, 'every machine the fork approves must be sound', {size: 28, anchor: 'middle', fill: C.gold}));
-beat(7, 13, (t) => {
+/* 13. Limits: what must be trusted, what is not built */
+const trT = keep(Txt(800, 110, 'what can go wrong', {size: 38, anchor: 'middle'}));
+const tr1 = keep([Txt(150, 210, 'a mistake in an application’s rules', {size: 27}), Txt(1450, 210, 'hurts only that application', {size: 27, fill: C.green, anchor: 'end'})]);
+const tr2 = keep([Txt(150, 290, 'a broken Lean checker or proving machine', {size: 27}), Txt(1450, 290, 'hurts every application', {size: 27, fill: C.red, anchor: 'end'})]);
+const tr3 = keep(Txt(800, 360, 'so Ethereum must approve only sound checkers and machines', {size: 23, fill: C.dim, anchor: 'middle'}));
+const nb = keep(Card(150, 450, 1300, 330, C.grey, {fo: 0.04, sw: 2}));
+const nbT = keep(CT(nb, 30, 52, 'not built yet', {size: 28, fill: C.dim}));
+const NB = ['a Lean checker that leanVM can prove in pieces, since Lean proofs are large', 'a block proof that accepts any program or circuit given as data', 'zero knowledge in both provers, so payment proofs reveal nothing', 'a measurement of real Lean proof sizes, starting with one small program'];
+const nbR = keep(NB.map((s, i) => CT(nb, 50, 116 + 52 * i, '·  ' + s, {size: 24})));
+beat(7, 15, (t) => {
   clear(t);
-  A.write(fT, t + 0.6, 1.0);
-  fRows.forEach((r, i) => { A.fadeIn(r[0], t + 2.0 + i * 2.6, 0.5, {dx: -10}); A.fadeIn(r[1], t + 2.8 + i * 2.6, 0.5); A.fadeIn(r[2], t + 3.3 + i * 2.6, 0.5); });
-  A.write(fNote, t + 10.0, 1.2);
+  A.write(trT, t + 0.6, 0.9);
+  A.fadeIn(tr1[0], t + 1.6, 0.5, {dx: -10}); A.fadeIn(tr1[1], t + 2.4, 0.5);
+  A.fadeIn(tr2[0], t + 3.6, 0.5, {dx: -10}); A.fadeIn(tr2[1], t + 4.4, 0.5); A.fadeIn(tr3, t + 5.4, 0.6);
+  A.draw(nb, t + 7.0, 1.0); A.fadeIn(nbT, t + 7.4, 0.5); A.fadeIn(nbR, t + 8.0, 0.5, {lag: 0.9, dx: -10});
 });
 
-/* 14. Recap: where things live, and what is permanent */
-const rOn = keep(Card(80, 110, 680, 380, C.yellow, {fo: 0.035, sw: 2, dash: '8 6'}));
-const rOnT = keep(CT(rOn, 30, 52, 'on chain', {size: 30, fill: C.yellow}));
-const rOnRows = keep([['the rules (spec)', C.blue, 'the identity; cannot be rebuilt'], ['the code', C.teal, 'stored once; read by validators']].map(([a, c, b], i) => [Chip(...at(rOn, 210, 140 + 120 * i), a, c, {parent: rOn, size: 24}), CT(rOn, 380, 148 + 120 * i, b, {size: 21, fill: C.dim})]));
-const rOff = keep(Card(840, 110, 680, 380, C.grey, {fo: 0.03, sw: 2, dash: '8 6'}));
-const rOffT = keep(CT(rOff, 30, 52, 'off chain', {size: 30, fill: C.dim}));
-const rOffDoc = keep(LeanDoc(...at(rOff, 140, 170), {parent: rOff, w: 60, h: 80}));
-const rOffDocL = keep(CT(rOff, 220, 178, 'Lean proofs  ·  can be rewritten', {size: 23}));
-const rOffCert = keep(Stark(...at(rOff, 140, 290), 'certificate', {parent: rOff, k: 0.85}));
-const rOffCertL = keep(CT(rOff, 240, 298, 'certificates  ·  re-proven when needed', {size: 23}));
-const perm = keep(Card(80, 560, 1440, 230, C.blue, {fo: 0.04}));
-const permT = keep(CT(perm, 30, 52, 'kept by Ethereum forever', {size: 30, fill: C.blue}));
-const PERM = ['the claim format and its hash', 'Lean’s logic and three axioms', 'a small set of basic Lean definitions', 'the way rules are hashed'];
-const permRows = keep(PERM.map((s, i) => CT(perm, 60 + 700 * (i % 2), 120 + 56 * Math.floor(i / 2), '·  ' + s, {size: 26})));
-beat(8, 17, (t) => {
+/* 14. Summary */
+const sumT = keep(Txt(800, 110, 'contracts remember the rules', {size: 44, anchor: 'middle'}));
+const sumT2 = keep(Txt(800, 160, 'code and machines can change underneath them', {size: 28, anchor: 'middle', fill: C.dim}));
+const sRules = keep(Card(560, 230, 480, 110, C.blue));
+const sRulesT = keep(CT(sRules, 240, 50, 'rules', {size: 32, fill: C.blue, anchor: 'middle'}));
+const sRulesS = keep(CT(sRules, 240, 86, 'permanent  ·  on chain', {size: 20, fill: C.dim, anchor: 'middle'}));
+const sCtr = keep(Card(120, 245, 320, 80, C.grey, {fo: 0.05}));
+const sCtrT = keep(CT(sCtr, 160, 50, 'contract', {size: 26, anchor: 'middle'}));
+const sCtrA = keep(Arrow(446, 285, 552, 285, C.blue));
+const SC = [[330, 'RISC-V program', C.teal], [800, 'circuit', C.green], [1270, 'future code', C.grey]];
+const sCodes = keep(SC.map(([x, s, c]) => [Card(x - 170, 470, 340, 90, c), Txt(x, 524, s, {size: 25, fill: c, anchor: 'middle'}), LeanDoc(x + 134, 528, {w: 30, h: 38}), Line(x, 460, 800, 346, C.faint, {dash: '5 6'})]));
+const sCodeL = keep(Txt(800, 610, 'replaceable code, each with a Lean proof and a certificate', {size: 22, fill: C.dim, anchor: 'middle'}));
+const sMach = keep(Card(160, 660, 1280, 90, C.gold, {fo: 0.05}));
+const sMachT = keep(CT(sMach, 640, 54, 'proving machines:  leanVM  ·  leanR1CS  ·  later ones', {size: 25, fill: C.gold, anchor: 'middle'}));
+const sMachL = keep(Txt(800, 800, 'replaceable by a fork', {size: 22, fill: C.dim, anchor: 'middle'}));
+beat(8, 14, (t) => {
   clear(t);
-  A.draw(rOn, t + 0.6, 1.0); A.fadeIn(rOnT, t + 1.0, 0.4); A.fadeIn(rOnRows, t + 1.4, 0.5, {lag: 0.6, dx: -10});
-  A.draw(rOff, t + 3.8, 1.0); A.fadeIn(rOffT, t + 4.2, 0.4); A.fadeIn([rOffDoc, rOffDocL], t + 4.8, 0.5); A.fadeIn([rOffCert, rOffCertL], t + 5.6, 0.5);
-  A.draw(perm, t + 7.8, 1.0); A.fadeIn(permT, t + 8.2, 0.5); A.fadeIn(permRows, t + 8.8, 0.5, {lag: 0.6, dx: -10});
+  A.write(sumT, t + 0.6, 1.2); A.fadeIn(sumT2, t + 1.6, 0.6, {dy: 8});
+  A.draw(sRules, t + 2.6, 0.9); A.fadeIn([sRulesT, sRulesS], t + 3.0, 0.5);
+  A.draw(sCtr, t + 3.6, 0.8); A.fadeIn(sCtrT, t + 3.9, 0.4); A.draw(sCtrA, t + 4.2, 0.5);
+  sCodes.forEach(([c, s, d, l], i) => { const u = t + 5.2 + i * 0.7; A.draw(l, u, 0.5); A.draw(c, u + 0.2, 0.8); A.fadeIn(s, u + 0.5, 0.4); A.fadeIn(d, u + 0.6, 0.4); });
+  A.fadeIn(sCodeL, t + 7.8, 0.5);
+  A.draw(sMach, t + 9.0, 0.9); A.fadeIn(sMachT, t + 9.4, 0.5); A.fadeIn(sMachL, t + 10.0, 0.5);
 });
 
-/* 15. Close */
-const closeT = keep(Txt(800, 300, 'contracts pin rules  ·  machines stay replaceable', {size: 44, anchor: 'middle'}));
-const closeS = keep(Txt(800, 370, 'circuits or RISC-V, chosen per piece of code, not once at deployment', {size: 27, anchor: 'middle', fill: C.dim}));
-const openCard = keep(Card(160, 560, 1280, 170, C.grey, {fo: 0.05, sw: 2}));
-const openT = keep(CT(openCard, 30, 48, 'still open', {size: 24, fill: C.dim}));
-const openS = keep(CT(openCard, 30, 98, 'a Lean checker leanVM can prove in pieces  ·  dynamic key recursion  ·  zero knowledge in both provers', {size: 22}));
-const openS2 = keep(CT(openCard, 30, 138, 'how large real Lean proofs are: experiment 1 measures one compiled Merkle-path program', {size: 22}));
-beat(8, 11, (t) => {
-  clear(t);
-  A.write(closeT, t + 0.6, 1.6); A.fadeIn(closeS, t + 2.0, 0.6, {dy: 10});
-  A.draw(openCard, t + 3.6, 0.9); A.fadeIn(openT, t + 4.0, 0.4); A.fadeIn([openS, openS2], t + 4.4, 0.6, {lag: 0.5});
-});
-
-const CHAPTERS = [['Today', 1], ['Rules', 2], ['Two proofs', 3], ['Certify', 4], ['Transaction', 5], ['Block', 6], ['Upgrades', 7], ['Recap', 8]];
+const CHAPTERS = [['Setting', 1], ['Problem', 2], ['Idea', 3], ['Certify', 4], ['Payment', 5], ['Upgrades', 6], ['Limits', 7], ['Summary', 8]];
 
 
 /* ---------------- rendering ---------------- */
