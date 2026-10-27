@@ -18,4 +18,8 @@ A third animation, *How circuit claims work*, follows the same transfer when the
 
 A comparison, *PCS_open vs circuit claims* (about 4 minutes), explains the two jobs in a STARK proof and the boundary between app and protocol. It then weighs the tradeoffs: shared PIOP safety, fixed constraint formats, large-circuit availability and preparation, PCS upgrades, and the compatibility obligations when adding an ISA later. It uses diagrams without a mathematical derivation. Open it at **https://soispoke.github.io/eip8288-private-transfer/compare/**.
 
-`index.html`, `pcs-open/index.html`, `circuit-claims/index.html` and `compare/index.html` are single self-contained files. Their fonts are KaTeX's Computer Modern fonts, from [KaTeX](https://github.com/KaTeX/KaTeX) (MIT License).
+## Lean specifications as application identity
+
+A fifth animation, *Lean Specifications as Application Identity* (about 4 minutes), explains a design in which a private application is identified by a Lean specification of its rules rather than by its code. Anyone certifies RISC-V or circuit code with a Lean proof that a fixed checker verifies once, and a leanVM proof of that check is the code's certificate. Wallets prove with the fastest certified code, the block carries one leanVM proof, and machines can change without any contract changing. Open it at **https://soispoke.github.io/eip8288-private-transfer/lean-spec/**. It shows a design sketch that is not built, and its timings are development measurements, as its spec notes say.
+
+`index.html`, `pcs-open/index.html`, `circuit-claims/index.html`, `compare/index.html` and `lean-spec/index.html` are single self-contained files. Their fonts are KaTeX's Computer Modern fonts, from [KaTeX](https://github.com/KaTeX/KaTeX) (MIT License).
