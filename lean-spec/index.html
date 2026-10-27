@@ -536,7 +536,7 @@ const CAP = [
   /* 5 */ 'The program’s authors write a Lean proof that it follows the rules: every run that Ethereum’s machine, described in Lean, accepts has a witness satisfying the rules. The machine description is part of the statement. The proof is written once per program and can be large.',
   /* 6 */ 'A program called the Lean checker, two Lean kernels compiled to RISC-V, checks that proof. It writes the theorem itself and rejects tricks such as redefining arithmetic or adding axioms. Anyone runs it once, off chain.',
   /* 7 */ 'leanVM proves that run like any other program. The result is the certificate, a small proof whose public output names four hashes: the rules, the machine description, the program and the Lean proof. The Lean proof itself stays off chain.',
-  /* 8 */ 'The pool’s contract pins three hashes when it is deployed: its rules, the machine description and the Lean checker. It also keeps a list of approved programs, empty at first.',
+  /* 8 */ 'The pool’s contract pins three hashes when it is deployed: its rules, the machine description and the Lean checker. It also keeps a list of approved programs, empty at first, to which anyone with a certificate may add one.',
   /* 9 */ 'One frame transaction (EIP-8141) approves a program. Its first frame lets the sender pay, its second is an EIP-8288 dependency for the certificate under the checker’s hash, and its third calls the pool’s approve function.',
   /* 10 */ 'The contract never verifies the certificate. It reads the dependency frame, checks that it is a real dependency for exactly the hashes it pinned, and adds program P to its approved list. A block is valid only if its block proof covers every dependency, certificate included.',
   /* 11 */ 'Back to Alice. Her wallet runs program P on her witness and leanVM proves the run: an ordinary program proof, about 0.15 s in development tests, with no Lean involved.',
@@ -546,7 +546,7 @@ const CAP = [
   /* 15 */ 'The builder puts one block proof in the header, covering every dependency in the block. Validators check it once and run the frames. Alice’s payment settles, and nothing about Lean happened in the mempool or the block.',
   /* 16 */ 'Months later, someone writes a faster program, P2. They prove in Lean that it follows the same rules, get a certificate and send one approval transaction. Wallets switch to P2, while the rules Alice relies on and the contract’s pins stay the same.',
   /* 17 */ 'A fork can replace leanVM’s proof system underneath. Approvals are stored results, so nothing is re-proven, and a new Lean release changes nothing on chain.',
-  /* 18 */ 'Who may approve is the pool’s choice: a fixed list set at deployment, a governance key, or anyone with a certificate. Open approval stays exposed to a buggy checker forever, so an immutable pool should fix its list or require two independent checkers.',
+  /* 18 */ 'Who may approve is the pool’s choice: a fixed list set at deployment, a governance key, or, as here, anyone with a certificate. An immutable open pool is tied to its checker forever, so it should require two independent checkers or follow a checker list that forks maintain.',
   /* 19 */ 'Wrong rules can drain the pool, as a contract bug can today. A checker bug reaches pools that use that checker, through programs approved with it. A machine description that misses runs reaches every pool that pins it, so it should be the machine’s official definition. The biggest risk: Lean proofs about real code may be too large to check.',
   /* 20 */ 'Ethereum fixes only its machine. The rules, the machine description and the checker are chosen by each contract, by hash. Wallets check those choices and show users the rules: certificate transparency for on-chain code.',
   /* 21 */ 'Recap. The rules and the Lean proof never go on chain in full; the checker’s run becomes a certificate that approves a program once. Alice’s witness never leaves her wallet, and her program proof travels through the mempool into the block’s one proof.',
@@ -571,7 +571,7 @@ const NOTE = [
   /* 15 */ 'The header field `recursive_stark` holds the block proof and `block_deps_hash`, a hash of the sorted dependency list, as in EIP-8288. A block is valid only if its block proof covers every dependency it declares and every transaction is valid. Upstream EIP-8288 defines only leanSPHINCS and reserves leanSTARK; the program scheme keyed by `image_id` exists only in the program-lane proposal.',
   /* 16 */ 'A faster program needs only a new Lean proof and certificate. Open and governed pools approve it; a fixed pool cannot. Adding a program invalidates nothing; removing one invalidates the pool’s own pending transactions that use it, which nodes notice when they revalidate the sender’s transactions. Each dependency names its program, so the anonymity set splits by program: pools should keep few programs approved.',
   /* 17 */ 'A new prover, PCS, internal hash or field for the same machine leaves contracts unchanged: the statement digest and `image_id` are fixed by the program lane, not the prover, and approvals are stored results. A new Lean release changes nothing on chain; certificates remain facts about the checker that made them. A prover bug can forge approvals that outlive the fix; governed pools remove them by recorded block number.',
-  /* 18 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. Two independent checkers take two approval transactions, since EIP-8288 allows one proof dependency per transaction.',
+  /* 18 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. Two independent checkers take two approval transactions, since EIP-8288 allows one proof dependency per transaction. A checker list that forks maintain, offered as a precompile, would let a fork drop a broken checker for every pool that opts in; `approve` and even payments can query it, and no Lean enters consensus.',
   /* 19 */ 'A checker bug can sit in either kernel, the wrapper, its build or the logic; the remedy is to re-check approved proofs with a corrected checker. A machine description narrower than the machine affects fixed pools too; if it is the machine’s official definition, any gap is a prover bug that a fork fixes for everyone. sig.golf’s 8.3 GB of Lean proofs took 3,666 s and 17.8 GB of memory to replay.',
   /* 20 */ 'Ethereum enshrines only its machine (`ERV64_V1` in the program lane) and its prover. Before trusting a pool, a wallet reads its pins and approved set, checks that the published rules hash to `spec_id`, that `model_id` and `checker_id` are ones it recognises, and that the contract’s own code matches a known template, since the rules cover only the proving program. The chain records which programs were checked against which rules.',
   /* 21 */ 'On chain: the pins, the approved set and each transaction’s dependency, all settled by one block proof. Off chain: the rules (published, ideally also kept in state), the Lean proof (authenticated by its `export_hash`), the witness (in the wallet) and the certificate (once, in a mempool wrapper). Nothing in Lean runs on chain or per transaction.',
@@ -849,7 +849,7 @@ const pinL = PINS.map(([s], i) => CT(ck, 28, PY[i] + 8, s, {size: 25}));
 const pinC = PINS.map(([, h, c], i) => CChip(ck, 560, PY[i], h, c, {w: 190, size: 21}));
 const pinFly = PINS.map(([, h, c], i) => Chip(1980, 300 + 80 * i, h, c, {w: 190, size: 21}));
 const ckDiv2 = CLine(ck, 20, 298, 680, 298, C.rule);
-const ckApL = CT(ck, 28, 340, 'approved programs', {size: 22, fill: C.dim});
+const ckApL = CT(ck, 28, 340, 'approved programs  ·  anyone with a certificate may add one', {size: 22, fill: C.dim});
 const ckNone = CT(ck, 28, 388, 'none yet', {size: 24, fill: C.dim});
 const AY = [382, 430];
 const apP = MC(ck, 104, AY[0], 'program <m>P</m>', C.teal, {w: 160, size: 22});
@@ -1212,9 +1212,9 @@ const who = WHO.map(([name, Ic, col, a, b, c], i) => {
   if (c) m.parts.push(CT(m, 30, 250, c, {size: 22, fill: C.dim}));
   return m;
 });
-const openRed = Txt(7720, 572, 'exposed to a buggy checker for good', {size: 26, fill: C.red, anchor: 'middle'});
+const openRed = Txt(7720, 572, 'exposed to its checker’s bugs', {size: 26, fill: C.red, anchor: 'middle'});
 const openLine = Line(7500, 536, 7940, 536, C.red, {sw: 3});
-const advice = Txt(7200, 720, 'an immutable pool should fix its list, or require two independent checkers', {size: 28, anchor: 'middle'});
+const advice = Txt(7200, 720, 'an immutable open pool: two independent checkers, or a checker list that forks maintain', {size: 28, anchor: 'middle'});
 beat(16, 18, (t) => {
   cutTo(t, 7200);
   A.fadeOut([ck, fkT, lvBox, stored, aStored, reproven, fkDiv, leanRel, aRel, relS], t + 0.6, 0.1);
