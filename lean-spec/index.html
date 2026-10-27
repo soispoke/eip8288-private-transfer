@@ -613,10 +613,10 @@ const txLock = keep(Lock(...at(tx, 400, 104), C.red, {parent: tx, k: 1.2}));
 const txHid = keep(CT(tx, 260, 160, 'only Alice’s wallet sees this', {size: 21, fill: C.red, anchor: 'middle'}));
 const txProof = keep(Stark(850, 520, 'proof'));
 const aTx1 = keep(Arrow(218, 420, 322, 420, C.blue));
-const pool = keep(Card(1040, 320, 440, 200, C.grey, {fo: 0.05}));
+const pool = keep(Card(1040, 320, 470, 200, C.grey, {fo: 0.05}));
 const poolT = keep(CT(pool, 24, 50, 'privacy pool contract', {size: 28}));
 const poolC = keep(Check(...at(pool, 46, 120), C.green, {parent: pool}));
-const poolCT = keep(CT(pool, 76, 128, 'accepts the payment if the proof is valid', {size: 25}));
+const poolCT = keep(CT(pool, 76, 128, 'accepts if the proof is valid', {size: 25}));
 const aTx2 = keep(Arrow(858, 420, 1032, 420, C.yellow));
 const sees = keep(Txt(800, 660, 'Ethereum sees: a proof that the payment follows the pool’s rules', {size: 25, anchor: 'middle', fill: C.green}));
 const notSees = keep(Txt(800, 712, 'Ethereum does not see: who paid whom, or how much', {size: 25, anchor: 'middle', fill: C.red}));
@@ -639,10 +639,10 @@ const rulesN = keep(CT(rulesC, 30, 272, 'the protocol lets each nullifier be use
 const rulesL = keep(['1.  Alice’s notes are in the pool’s Merkle', '     tree, and she owns them', '2.  each nullifier is derived from its note', '3.  inputs = outputs + public amount + fee'].map((s, i) => CT(rulesC, 30, 108 + 38 * i, s, {size: 21})));
 const codeC = keep(Card(630, LY, 380, LH, C.teal));
 const codeT = keep(CT(codeC, 26, 52, 'implementation', {size: 32, fill: C.teal}));
-const codeL = keep(['code that checks', 'the rules on Alice’s', 'private witness'].map((s, i) => CT(codeC, 30, 108 + 38 * i, s, {size: 21})));
+const codeL = keep(['code that checks', 'the rules on Alice’s', 'private witness'].map((s, i) => CT(codeC, 30, 128 + 42 * i, s, {size: 22})));
 const machC = keep(Card(1090, LY, 400, LH, C.gold));
 const machT = keep(CT(machC, 26, 52, 'proof system', {size: 32, fill: C.gold}));
-const machL = keep(['proves one run of the', 'implementation and', 'outputs a proof'].map((s, i) => CT(machC, 30, 108 + 38 * i, s, {size: 21})));
+const machL = keep(['proves one run of the', 'implementation and', 'outputs a proof'].map((s, i) => CT(machC, 30, 128 + 42 * i, s, {size: 22})));
 const lA1 = keep(Arrow(556, LY + LH / 2, 622, LY + LH / 2, C.dim));
 const lA2 = keep(Arrow(1016, LY + LH / 2, 1082, LY + LH / 2, C.dim));
 const under = keep([[330, 'what must hold'], [820, 'how it is checked'], [1290, 'how the check is proven']].map(([x, s]) => Txt(x, LY + LH + 46, s, {size: 23, fill: C.dim, anchor: 'middle'})));
@@ -717,10 +717,10 @@ const rules2T = keep(CT(rules2, 26, 48, 'rules, written in Lean', {size: 28, fil
 const rules2L = keep(['<k=blue>def</k> ValidPayment (pub w : Bytes) : Prop :=', '  inTree pub w ∧ ownsNote w ∧', '  nullifierOk pub w ∧ balanced pub w'].map((s, i) => CT(rules2, 32, 110 + 40 * i, `<c>${s}</c>`, {size: 21})));
 const ctr2A = keep(Arrow(496, 230, 592, 230, C.blue));
 const rules2N = keep(CT(rules2, 32, 240, 'pub: public inputs  ·  w: Alice’s private witness', {size: 20, fill: C.dim}));
-const codeR = keep(Card(250, 560, 440, 130, C.teal));
+const codeR = keep(Card(250, 560, 440, 150, C.teal));
 const codeRT = keep(CT(codeR, 220, 56, 'RISC-V program', {size: 28, fill: C.teal, anchor: 'middle'}));
 const codeRS = keep(CT(codeR, 220, 98, 'proved by leanVM', {size: 21, fill: C.dim, anchor: 'middle'}));
-const codeK = keep(Card(910, 560, 440, 130, C.green));
+const codeK = keep(Card(910, 560, 440, 150, C.green));
 const codeKT = keep(CT(codeK, 220, 56, 'circuit', {size: 28, fill: C.green, anchor: 'middle'}));
 const codeKS = keep(CT(codeK, 220, 98, 'proved by leanR1CS', {size: 21, fill: C.dim, anchor: 'middle'}));
 const P1 = [790, 368], P2 = [1010, 368], Q1 = [470, 554], Q2 = [1130, 554];
@@ -754,10 +754,10 @@ beat(3, 7, (t) => {
 /* 7. A Lean proof */
 const doc1 = keep(LeanDoc(M1[0], M1[1] - 6));
 const doc2 = keep(LeanDoc(M2[0], M2[1] - 6));
-const docL = keep(Txt(M1[0] + 4, M1[1] + 66, 'Lean proof', {size: 21, fill: C.purple, anchor: 'middle'}));
-const docL2 = keep(Txt(M2[0] - 44, M2[1] + 16, 'Lean proof', {size: 21, fill: C.purple, anchor: 'end'}));
-const ck1 = keep(Check(M1[0] + 50, M1[1] - 20, C.green, {k: 0.8}));
-const ck2 = keep(Check(M2[0] + 50, M2[1] - 20, C.green, {k: 0.8}));
+const docL = keep(Txt(M1[0] - 46, M1[1] - 14, 'Lean proof', {size: 21, fill: C.purple, anchor: 'end'}));
+const docL2 = keep(Txt(M2[0] + 50, M2[1] - 14, 'Lean proof', {size: 21, fill: C.purple}));
+const ck1 = keep(Check(M1[0] + 44, M1[1] + 30, C.green, {k: 0.8}));
+const ck2 = keep(Check(M2[0] - 40, M2[1] + 30, C.green, {k: 0.8}));
 const thm = keep(Txt(800, 770, 'for every possible input:  if the proof system accepts a run, the rules hold', {size: 29, anchor: 'middle', fill: C.purple}));
 const thm2 = keep(Txt(800, 816, 'hard to write for real code  ·  verified once by the Lean checker', {size: 22, anchor: 'middle', fill: C.dim}));
 beat(4, 17, (t) => {
@@ -776,7 +776,7 @@ const lpI = keep(LeanDoc(...at(lpC, 320, 150), {parent: lpC, w: 66, h: 84}));
 const ppC = keep(Card(840, 180, 640, 470, C.gold));
 const ppT = keep(CT(ppC, 320, 60, 'leanVM proof', {size: 34, fill: C.gold, anchor: 'middle'}));
 const ppI = keep(Stark(...at(ppC, 320, 150), 'proof', {parent: ppC, k: 1.3}));
-const ppN = keep(CT(ppC, 320, 448, 'leanR1CS proofs are the same kind', {size: 20, fill: C.dim, anchor: 'middle'}));
+const ppN = keep(CT(ppC, 320, 452, 'leanR1CS proofs are the same kind', {size: 20, fill: C.dim, anchor: 'middle'}));
 const ROWS = [['about', 'an implementation, all inputs', 'one run, e.g. one payment'], ['made', 'once per implementation', 'every time'], ['size', 'large, maybe gigabytes', 'small, checked in ms'], ['checked by', 'the Lean checker', 'mempool nodes, validators']];
 const twoRows = keep(ROWS.map(([k, a, b], i) => [Row(lpC, 270 + 48 * i, k, a, 210, {size: 25, lx: 50}), Row(ppC, 270 + 48 * i, k, b, 210, {size: 25, lx: 50})]));
 beat(4, 13, (t) => {
@@ -788,13 +788,13 @@ beat(4, 13, (t) => {
 });
 
 /* 9. Certificates, and what is stored where */
-const cert1 = keep(Stark(M1[0] - 150, M1[1] - 6, 'certificate'));
-const cert2 = keep(Stark(M2[0] + 150, M2[1] - 6, 'certificate'));
+const cert1 = keep(Stark(M1[0] - 160, M1[1] + 40, 'certificate'));
+const cert2 = keep(Stark(M2[0] + 160, M2[1] + 40, 'certificate'));
 const certT = keep(Txt(800, 776, 'certificate  =  a leanVM proof that the Lean checker said yes', {size: 28, anchor: 'middle', fill: C.gold}));
 const certT2 = keep(Txt(800, 812, 'small and quick to verify, unlike the Lean proof itself', {size: 21, anchor: 'middle', fill: C.dim}));
 const onT1 = keep(Tag(1060, 132, 'stored on chain', C.yellow));
-const onT2 = keep(Tag(470, 718, 'stored on chain', C.yellow));
-const onT3 = keep(Tag(1130, 716, 'stored on chain', C.yellow));
+const onT2 = keep(Tag(470, 686, 'stored on chain', C.yellow));
+const onT3 = keep(Tag(1130, 686, 'stored on chain', C.yellow));
 const offT = keep(Txt(800, 856, 'Lean proofs and certificates are kept off chain', {size: 21, anchor: 'middle', fill: C.dim}));
 beat(4, 18, (t) => {
   clear(t);
@@ -843,14 +843,14 @@ beat(5, 21, (t) => {
 });
 
 /* 10b. The pool's VERIFY frame */
-const vf = keep(Card(250, 110, 1100, 520, C.grey, {fo: 0.05}));
+const vf = keep(Card(250, 140, 1100, 520, C.grey, {fo: 0.05}));
 const vfT = keep(CT(vf, 30, 52, 'pool’s VERIFY frame  (frame 1)', {size: 30}));
 const VF = ['the dependency names the pool’s pinned spec_id', 'data_hash is the hash of the statement it rebuilds', 'the nonce keys are the nullifiers, at sequence 0', 'the root comes from the pool’s own root source', 'fee, frame list and settlement gas are right'];
 const vfR = keep(VF.map((s, i) => [Check(...at(vf, 52, 116 + 58 * i), C.green, {parent: vf, k: 0.85}), CT(vf, 86, 124 + 58 * i, s, {size: 26})]));
 const vfA = keep(MC(vf, 550, 440, '<b>APPROVE</b>  ·  the pool pays for gas', C.green, {w: 480, size: 24}));
 const vfN = keep(CT(vf, 550, 494, 'it never verifies a proof: mempool nodes and the block proof do', {size: 21, fill: C.dim, anchor: 'middle'}));
-const pr1 = keep(Txt(800, 700, 'EIP-8250: a nonce key at sequence 0 can be used only once, so no note is spent twice', {size: 23, anchor: 'middle'}));
-const pr2 = keep(Txt(800, 746, 'EIP-8272: frame 0 fails unless the Merkle root is recent', {size: 23, anchor: 'middle'}));
+const pr1 = keep(Txt(800, 738, 'EIP-8250: a nonce key at sequence 0 can be used only once, so no note is spent twice', {size: 23, anchor: 'middle'}));
+const pr2 = keep(Txt(800, 784, 'EIP-8272: frame 0 fails unless the Merkle root is recent', {size: 23, anchor: 'middle'}));
 beat(5, 19, (t) => {
   clear(t);
   A.draw(vf, t + 0.6, 1.0); A.write(vfT, t + 1.0, 0.8);
@@ -862,16 +862,16 @@ beat(5, 19, (t) => {
 /* 11. Recursive aggregation in the mempool, to the block */
 const agT = keep(Txt(800, 80, 'recursive aggregation', {size: 38, anchor: 'middle'}));
 const agS = keep(Txt(800, 122, 'each merge is a leanVM proof that verifies the proofs below it', {size: 22, anchor: 'middle', fill: C.dim}));
-const LX = 160, L1X = 560, L2X = 900, RX0 = 1150;
+const LX = 170, L1X = 570, L2X = 900, RX0 = 1150;
 const LYS = [235, 315, 395, 475, 555, 635];
-const leaves = keep(LYS.map((y) => Stark(LX, y, 'LeanLeanProof', {k: 0.72})));
-const leafCk = keep(LYS.map((y) => Check(LX + 86, y, C.green, {k: 0.6})));
+const leaves = keep(LYS.map((y) => Stark(LX, y, 'LeanLeanProof', {k: 0.82})));
+const leafCk = keep(LYS.map((y) => Check(LX + 96, y, C.green, {k: 0.6})));
 const l1Y = [275, 435, 595];
 const l1 = keep(l1Y.map((y) => Stark(L1X, y, 'aggregate', {k: 0.85})));
 const l2 = keep(Stark(L2X, 355, 'aggregate', {k: 0.9}));
 const root = keep(Stark(RX0, 475, '<b>block proof</b>', {k: 1.05}));
 const E = (x1, y1, x2, y2) => Line(x1, y1, x2, y2, C.faint, {sw: 2});
-const e1 = keep(LYS.map((y, i) => E(LX + 102, y, L1X - 56, l1Y[i >> 1])));
+const e1 = keep(LYS.map((y, i) => E(LX + 112, y, L1X - 56, l1Y[i >> 1])));
 const e2 = keep([E(L1X + 56, l1Y[0], L2X - 58, 355), E(L1X + 56, l1Y[1], L2X - 58, 355)]);
 const e3 = keep([E(L2X + 58, 355, RX0 - 74, 475), E(L1X + 56, l1Y[2], RX0 - 74, 475)]);
 const colL = keep([[LX, 'LeanLeanProofs', 'nodes verify, run frames 0–1'], [L1X, 'aggregates', 'merged about every second'], [L2X, 'aggregates of aggregates', 'merged again, recursively'], [RX0, 'block', 'the builder includes one']].map(([x, a, b]) => [Txt(x, 700, a, {size: 22, anchor: 'middle'}), Txt(x, 730, b, {size: 19, fill: C.dim, anchor: 'middle'})]));
@@ -904,7 +904,7 @@ const UPS = [
   [IconShield, C.red, 'a bug in the Lean checker', 'a fork replaces it; affected applications pause until re-certified'],
 ];
 const upRows = UPS.map(([Ic, c, a, b], i) => {
-  const y = 270 + 128 * i;
+  const y = 300 + 140 * i;
   const r = {ic: Ic(150, y, c, 0.85), a: Txt(220, y - 6, a, {size: 28}), b: Txt(220, y + 30, b, {size: 21, fill: C.dim}), ok: Check(1300, y, C.green, {k: 0.9}), okT: Txt(1330, y + 8, 'contract unchanged', {size: 21, fill: C.green})};
   keep(Object.values(r));
   return r;
