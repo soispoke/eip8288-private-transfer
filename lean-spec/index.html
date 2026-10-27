@@ -529,53 +529,55 @@ function MiniWrap(x, y) {
 /* ---------------- words (verbatim from the spec) ---------------- */
 const CAP = [
   /* 0 */ 'Alice pays Bob privately through a pool identified by its rules, written in Lean, rather than by its code. This sketch assumes Ethereum proves RISC-V programs natively, as the proposed EIP-8288 program lane would. Lean never runs on chain.',
-  /* 1 */ 'In that lane, a private pool would pin its proving code: one program hash, for good. Users must trust that code, and an immutable pool can never adopt a faster program; an upgradable one asks users to trust whoever upgrades it. What if the pool pinned its rules instead?',
-  /* 2 */ 'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing no amount but the fee.',
-  /* 3 */ 'Her wallet keeps the witness private: the notes she spends, the key that owns them, their Merkle paths and her new notes. The public statement hides every amount but the fee and is bound to this exact transaction.',
-  /* 4 */ 'The pool’s developers write its rules once, as a short Lean definition: the notes are in the pool, they are hers, each nullifier comes from her key and its note, the new notes are sealed correctly, and the amounts balance. It is a condition on the statement and the witness, never compiled or run.',
-  /* 5 */ 'Wallets cannot prove a Lean definition. They prove runs of a program P, written in any language, say Rust, and compiled to RISC-V. leanVM, Ethereum’s prover for RISC-V and unrelated to the Lean language despite its name, proves each run. But does P follow the rules?',
-  /* 6 */ 'P’s authors answer with a Lean proof of one theorem: in every run the machine accepts, on any advice, the witness P was given satisfies the rules. Naming that witness matters: many privacy statements have some witness no matter what, so “a witness exists” would let a program that skips a check pass.',
-  /* 7 */ 'The theorem is only as strong as its description of the machine. Describe a machine that accepts no runs, and every program, even one that steals, “follows the rules”. So the pool pins one machine description, ideally the machine’s official definition written in Lean.',
-  /* 8 */ 'Lean proofs can be gigabytes, so a program checks them: the Lean checker, two independent Lean kernels compiled to RISC-V. It writes the theorem itself from the pinned rules, machine and program, so a proof cannot redefine addition, add an axiom or quietly prove something else.',
-  /* 9 */ 'Here is the bridge. Ethereum cannot check a Lean proof, but checking one is just a program run, and leanVM proves program runs. Anyone runs the checker once, off chain, and leanVM proves that run, once it supports runs this long. The result is a small certificate naming four hashes.',
-  /* 10 */ 'The pool’s contract pins three hashes at deployment, and no program: its rules, the machine description and the Lean checker, which also fixes the Lean version. These pins are the pool’s identity. Its approved list starts empty; in this pool, anyone with a matching certificate may add a program.',
-  /* 11 */ 'An EIP-8288 dependency is a claim the block must prove: this program ran and output this hash. The approval transaction claims that the checker ran and output the certificate’s hashes, carries the certificate beside it, and calls the pool’s approve function.',
-  /* 12 */ 'The contract never verifies the certificate: mempool nodes and the block proof do, as for any dependency. It checks only the claim: a real dependency frame, keyed by its checker, whose output hash matches its pins, P and the Lean proof’s hash. The same bytes in ordinary calldata would be unproven.',
-  /* 13 */ 'Back to Alice. Her wallet runs P on her witness and leanVM proves the run: an ordinary program proof, about 0.15 s in a development test without zero knowledge. No Lean is involved.',
-  /* 14 */ 'Her transaction is the usual private transfer: the pool is the sender, her nullifiers are single-use nonce keys (EIP-8250), and the dependency names P and her statement’s hash. The pool’s VERIFY frame adds one check, a read of its own storage: is P approved? It never verifies a proof.',
-  /* 15 */ 'Each mempool node checks the nonce keys are unused, runs the validation frames and verifies her proof. Every second it merges the proofs it holds into one recursive proof and forwards it, as EIP-8288 specifies. Nothing about Lean happens here.',
-  /* 16 */ 'The builder puts one block proof in the header, covering every dependency in the block. Validators check it once and run the frames. Alice’s payment settles, and Lean appeared nowhere in the mempool or the block.',
-  /* 17 */ 'Months later, someone writes a faster program, P2, proves in Lean that it follows the same rules and sends one approval. Wallets switch; the rules and pins stay put, which the code-pinned pool could not do. A fork may also swap leanVM’s proof system: approvals are stored results.',
-  /* 18 */ 'Who may approve is the pool’s choice: a fixed list approved during setup, a governance key, or, as here, anyone with a certificate. An immutable open pool stays tied to its checker; it can require two independent checkers or, if forks ever offer one, follow a fork-maintained checker list.',
-  /* 19 */ 'What can go wrong maps onto the pieces. Wrong rules can drain the pool, like a contract bug today. A checker bug reaches pools that pinned that checker. A machine description that misses runs reaches every pool that pins it, and a prover bug every program. The biggest open risk: Lean proofs may be too large to check.',
-  /* 20 */ 'Ethereum enshrines no language but its machine. The rules, the machine description and the checker are chosen by each contract, by hash. Wallets check those choices and the contract’s own code, and show users the rules: a public record of which programs were checked against which rules.',
-  /* 21 */ 'Recap. The contract pins only the rules’ hash, and the Lean proof stays off chain; the checker’s run becomes a certificate that approves a program once. Alice’s witness never leaves her wallet, and her program proof travels through the mempool into the block’s one proof.',
-  /* 22 */ 'Three layers. Users rely on the rules, pinned by hash. Programs come and go, each tied to the rules once by a Lean proof that the checker turned into a certificate. Ethereum proves only runs of its machine, on every payment, and never runs Lean.',
+  /* 1 */ 'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing no amount but the fee.',
+  /* 2 */ 'Her wallet keeps the witness private: the notes she spends, the key that owns them, their Merkle paths and her new notes. The public statement hides every amount but the fee and is bound to this exact transaction.',
+  /* 3 */ 'What must her proof show? That her secrets satisfy the pool’s rules against the public statement: her notes are in the pool, they are hers, each nullifier comes from her key and its note, the new notes are sealed correctly, and the amounts balance.',
+  /* 4 */ 'A program checks those rules on her witness: P, written in any language, say Rust, and compiled to RISC-V. leanVM, Ethereum’s prover for RISC-V and unrelated to the Lean language despite its name, proves each run. In the proposed program lane, the pool’s contract pins P’s hash.',
+  /* 5 */ 'That pin is the problem. Users must trust P, compiled code that almost nobody reads, and an immutable pool can never adopt a faster program; an upgradable one asks users to trust whoever upgrades it. What if the pool pinned its rules instead?',
+  /* 6 */ 'So the developers write the same rules once, as a short Lean definition: a condition on the statement and the witness, never compiled or run. The question becomes: does program P follow these rules?',
+  /* 7 */ 'P’s authors answer with a Lean proof of one theorem: in every run the machine accepts, on any advice, the witness P was given satisfies the rules. Naming that witness matters: many privacy statements have some witness no matter what, so “a witness exists” would let a program that skips a check pass.',
+  /* 8 */ 'The theorem is only as strong as its description of the machine. Describe a machine that accepts no runs, and every program, even one that steals, “follows the rules”. So the pool pins one machine description, ideally the machine’s official definition written in Lean.',
+  /* 9 */ 'Lean proofs can be gigabytes, so a program checks them: the Lean checker, two independent Lean kernels compiled to RISC-V. It writes the theorem itself from the pinned rules, machine and program, so a proof cannot redefine addition, add an axiom or quietly prove something else.',
+  /* 10 */ 'Here is the bridge. Ethereum cannot check a Lean proof, but checking one is just a program run, and leanVM proves program runs. Anyone runs the checker once, off chain, and leanVM proves that run, once it supports runs this long. The result is a small certificate naming four hashes.',
+  /* 11 */ 'The pool’s contract pins three hashes at deployment, and no program: its rules, the machine description and the Lean checker, which also fixes the Lean version. These pins are the pool’s identity. Its approved list starts empty; in this pool, anyone with a matching certificate may add a program.',
+  /* 12 */ 'An EIP-8288 dependency is a claim the block must prove: this program ran and output this hash. The approval transaction claims that the checker ran and output the certificate’s hashes, carries the certificate beside it, and calls the pool’s approve function.',
+  /* 13 */ 'The contract never verifies the certificate: mempool nodes and the block proof do, as for any dependency. It checks only the claim: a real dependency frame, keyed by its checker, whose output hash matches its pins, P and the Lean proof’s hash. The same bytes in ordinary calldata would be unproven.',
+  /* 14 */ 'Back to Alice. Her wallet runs P on her witness and leanVM proves the run: an ordinary program proof, about 0.15 s in a development test without zero knowledge. No Lean is involved.',
+  /* 15 */ 'Her transaction is the usual private transfer: the pool is the sender, her nullifiers are single-use nonce keys (EIP-8250), and the dependency names P and her statement’s hash. The pool’s VERIFY frame adds one check, a read of its own storage: is P approved? It never verifies a proof.',
+  /* 16 */ 'Each mempool node checks the nonce keys are unused, runs the validation frames and verifies her proof. Every second it merges the proofs it holds into one recursive proof and forwards it, as EIP-8288 specifies. Nothing about Lean happens here.',
+  /* 17 */ 'The builder puts one block proof in the header, covering every dependency in the block. Validators check it once and run the frames. Alice’s payment settles, and Lean appeared nowhere in the mempool or the block.',
+  /* 18 */ 'Months later, someone writes a faster program, P2, proves in Lean that it follows the same rules and sends one approval. Wallets switch; the rules and pins stay put, which the code-pinned pool could not do. A fork may also swap leanVM’s proof system: approvals are stored results.',
+  /* 19 */ 'Who may approve is the pool’s choice: a fixed list approved during setup, a governance key, or, as here, anyone with a certificate. An immutable open pool stays tied to its checker; it can require two independent checkers or, if forks ever offer one, follow a fork-maintained checker list.',
+  /* 20 */ 'What can go wrong maps onto the pieces. Wrong rules can drain the pool, like a contract bug today. A checker bug reaches pools that pinned that checker. A machine description that misses runs reaches every pool that pins it, and a prover bug every program. The biggest open risk: Lean proofs may be too large to check.',
+  /* 21 */ 'Ethereum enshrines no language but its machine. The rules, the machine description and the checker are chosen by each contract, by hash. Wallets check those choices and the contract’s own code, and show users the rules: a public record of which programs were checked against which rules.',
+  /* 22 */ 'Recap. The contract pins only the rules’ hash, and the Lean proof stays off chain; the checker’s run becomes a certificate that approves a program once. Alice’s witness never leaves her wallet, and her program proof travels through the mempool into the block’s one proof.',
+  /* 23 */ 'Three layers. Users rely on the rules, pinned by hash. Programs come and go, each tied to the rules once by a Lean proof that the checker turned into a certificate. Ethereum proves only runs of its machine, on every payment, and never runs Lean.',
 ];
 const NOTE = [
   /* 0 */ 'Based on the design note “Lean Specifications as Application Identity” (Alex’s contract version), a research design sketch, not part of any EIP. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM, and program dependencies are a proposed EIP-8288 extension, the RISC-V program lane (`ERV64_V1`), proved by leanVM. Times and sizes are development measurements.',
-  /* 1 */ 'In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program. A fork can swap the prover, PCS, hash or field underneath, but not the program. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
-  /* 2 */ 'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative. The pool runs on EIP-8141 frame transactions, so it can be the sender and pay the fee itself, and Alice needs no public account.',
-  /* 3 */ 'The witness is the private input, the statement the public input. Here the statement is exactly the journal, the bytes the machine hashes into the dependency’s `data_hash`: the pool’s public inputs themselves, with the program lane’s domain label, chain and contract, so the contract can rebuild the same bytes. Commitments hide amounts and owners; only her key links a nullifier to its note.',
-  /* 4 */ 'The rules are a Lean predicate `R : Bytes → Bytes → Prop` on the statement and the witness, in encodings `R` itself decodes. `spec_id` hashes a canonical encoding of `R` and every declaration it uses above the checker’s prelude. The witness is explicit: a rule of the form ∃ w, R pub w holds for every public input in many privacy protocols, so a program that skipped a check could still be proven sound.',
-  /* 5 */ 'The program is a canonical image for the exposed machine, identified by its `image_id` as the program lane defines it (RISC-V, `ERV64_V1`). Wallets prove runs of it with leanVM; Lean is never compiled or turned into a circuit. In the program lane alone, an immutable contract pins one `image_id` for good, a bet on code whose speed keeps changing: with a BLAKE2s protocol hash, circuits beat RISC-V on hash-heavy statements.',
-  /* 6 */ 'The Lean proof (the soundness proof) proves `∀ pub w adv, M.Run prog pub w adv → R pub w`. `M.Run` is the machine description, `prog` the program’s bytes, `adv` free advice and `w` the contents of the program’s witness region, so a payment proof shows knowledge of a valid witness, not just that one exists. `model_id` hashes the machine description. The closest example, sig.golf’s proofs about small RISC-V images plus security bounds, exported to 8.3 GB.',
-  /* 7 */ 'The model `M.Run` must accept every run the prover can prove: advice and uninitialised memory quantified, no tighter step bound, the whole canonical image decoded as the loader does. If it is the Lean form of the machine’s normative definition, any gap is a prover bug a fork fixes for every program. leanVM’s formal verification so far covers an earlier six-instruction machine.',
-  /* 8 */ 'Two kernels must both accept: con-ron, the Rust translation of con-leche (whose checking algorithm is proven sound; both ship with Lean 4.35.0), and nanoda. The wrapper’s rules: the environment is the prelude, then the machine description’s and the rules’ closures; no redeclaration unless identical to the existing one; roots with exactly the expected types; `prog` built as one `Nat` literal from the image bytes; the theorem written by the checker; axioms only `propext`, `Quot.sound` and `Classical.choice`.',
-  /* 9 */ 'The certificate is a leanVM proof of one checker run whose journal is `("LEAN_CERT_V1", spec_id, model_id, image_id, export_hash)`; `export_hash` hashes the Lean proof in Lean’s export format. The journal names no contract, so one certificate can approve the same program in every contract with the same pins. Proving a run this long needs continuations or a split checker, which leanVM lacks today.',
-  /* 10 */ 'The contract pins `spec_id`, `model_id`, `checker_id` (the checker’s `image_id`, which commits to its prelude and encoding) and the program scheme. Its approved set holds entries `(scheme, image_id)`, each recorded with its `export_hash` and the block that approved it. An immutable pool should keep the rules themselves in state, for example as a data contract’s code, since calldata expires under EIP-4444.',
-  /* 11 */ 'Frame 0 is the sender’s own `VERIFY` frame, approving it as sender and payer. Frame 1 is an EIP-8288 dependency frame (mode 4) with one triple `(scheme, data_hash, checker_id)`, where `data_hash` is the program lane’s digest of the certificate’s journal. Frame 2 is a `SENDER` frame calling `approve(image_id, export_hash)`. The certificate travels in the transaction’s mempool wrapper, never on chain.',
-  /* 12 */ '`approve` reads frame 1 with EIP-8141 frame introspection and checks that its mode is 4, that it holds one 96-byte triple, that the scheme byte is the pinned scheme, that `data_hash` equals the digest it recomputes from its pins and arguments, and that the key is `checker_id`. It records `(scheme, image_id)` with `export_hash` and the block number. The mode check matters: a triple in ordinary calldata is unproven.',
-  /* 13 */ 'The payment proof is an ordinary program-lane proof of one run of P on Alice’s witness. In a development test leanVM proved the spend in 0.151 s on 12 threads, proofs not yet zero knowledge; that is a development measurement, not a benchmark of a deployed system. Nothing about Lean happens per transaction, and Lean is never turned into a circuit.',
-  /* 14 */ 'The four frames are the program lane’s: EIP-8272’s recent root verifier frame, the pool’s `VERIFY` frame, the dependency frame with `(ERV64_V1, data_hash, image_id)` and the `SENDER` frame that appends the new note commitments. An EIP-8250 nonce key at sequence 0 can be consumed only once. `VERIFY` checks the lane’s usual conditions plus one: `(scheme, image_id)` is in its approved set. Validation may read only the sender’s storage, and the pool is the sender: one storage read, or none if the set is fixed in code.',
-  /* 15 */ 'Mempool nodes check the nonce keys, run the validation frames and verify the program proof against `(ERV64_V1, data_hash, image_id)`. EIP-8288 sets `AGGREGATION_INTERVAL` to 1000 ms: every second a node merges the proofs it holds into one recursive proof and forwards it. EIP-8141 allows one pending frame transaction per account and EIP-8250 keeps that limit; more, on disjoint nonce keys, is left to a future mempool policy.',
-  /* 16 */ 'The header field `recursive_stark` holds the block proof and `block_deps_hash`, a hash of the sorted, deduplicated dependencies’ `data_hash` and key (not the scheme), as in EIP-8288. A block is valid only if its block proof covers every dependency it declares and every transaction is valid. Upstream EIP-8288 defines only leanSPHINCS and reserves leanSTARK; the program scheme keyed by `image_id` exists only in the program-lane proposal.',
-  /* 17 */ 'A faster program needs only a new Lean proof and certificate: open and governed pools approve it, a fixed pool cannot. Removing a program invalidates the pool’s own pending transactions that use it. Each dependency names its program, so the anonymity set splits by program: keep few approved. A new prover, PCS, internal hash or field for the same machine leaves contracts unchanged, since the statement digest and `image_id` are fixed by the program lane and approvals are stored results. A new Lean release changes nothing on chain.',
-  /* 18 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. Two independent checkers take two approval transactions, since EIP-8288 allows one STARK dependency per transaction. A checker list that forks maintain, offered as a precompile, would let a fork drop a broken checker for every pool that opts in; `approve` can query it, and payments too if approvals record their `checker_id`, and no Lean enters consensus.',
-  /* 19 */ 'A checker bug needs both kernels to fail, or sits in the wrapper, its build or the logic; the remedy is to re-check approved proofs with a corrected checker. A prover bug can forge approvals that outlive the fix; governed pools remove them by recorded block number. A machine description narrower than the machine affects fixed pools too; if it is the machine’s official definition, any gap is a prover bug that a fork fixes for everyone. sig.golf’s proofs about small RISC-V images plus security bounds, 8.3 GB, took 3,666 s and 17.8 GB of memory to replay.',
-  /* 20 */ 'Ethereum enshrines only its machine (`ERV64_V1` in the program lane) and its prover. Before trusting a pool, a wallet reads its pins and approved set, checks that the published rules hash to `spec_id`, that `model_id` and `checker_id` are ones it recognises, and that the contract’s own code matches a known template, since the rules cover only the proving program. The chain records which programs were checked against which rules.',
-  /* 21 */ 'On chain: the pins, the approved set and each transaction’s dependency, all settled by one block proof. Off chain: the rules (published, ideally also kept in state), the Lean proof (authenticated by its `export_hash`), the witness (in the wallet) and the certificate (once, in a mempool wrapper). Still open in the design note: the size and cost of Lean proofs about compiled code, the checker as a provable RISC-V program (continuations or a split), a Lean model of the machine’s official definition, the scheme in the block statement and a standard checker.',
-  /* 22 */ 'Design note: Lean Specifications as Application Identity. Comparison: Lean Specifications in the Protocol vs in the Contract. Reviewed in internal AI-assisted audits 01 to 05. Still open: Lean proof size, the checker as a provable program, a Lean model of the machine, the scheme in the block statement.',
+  /* 1 */ 'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative. The pool runs on EIP-8141 frame transactions, so it can be the sender and pay the fee itself, and Alice needs no public account.',
+  /* 2 */ 'The witness is the private input, the statement the public input. Here the statement is exactly the journal, the bytes the machine hashes into the dependency’s `data_hash`: the pool’s public inputs themselves, with the program lane’s domain label, chain and contract, so the contract can rebuild the same bytes. Commitments hide amounts and owners; only her key links a nullifier to its note.',
+  /* 3 */ 'These are the minimal shielded pool’s rules: the spent notes are in the pool’s Merkle tree, the spending key owns them, each nullifier is derived from the key and the note, the new note commitments are well formed, and value balances with the public fee. The proof must show them without revealing the witness.',
+  /* 4 */ 'The program is a canonical image for the exposed machine, identified by its `image_id` as the program lane defines it (RISC-V, `ERV64_V1`). Wallets prove runs of it with leanVM; Lean is never compiled or turned into a circuit. In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program, a bet on code whose speed keeps changing. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
+  /* 5 */ 'In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program. A fork can swap the prover, PCS, hash or field underneath, but not the program. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
+  /* 6 */ 'The rules are a Lean predicate `R : Bytes → Bytes → Prop` on the statement and the witness, in encodings `R` itself decodes. `spec_id` hashes a canonical encoding of `R` and every declaration it uses above the checker’s prelude. The witness is explicit: a rule of the form ∃ w, R pub w holds for every public input in many privacy protocols, so a program that skipped a check could still be proven sound.',
+  /* 7 */ 'The Lean proof (the soundness proof) proves `∀ pub w adv, M.Run prog pub w adv → R pub w`. `M.Run` is the machine description, `prog` the program’s bytes, `adv` free advice and `w` the contents of the program’s witness region, so a payment proof shows knowledge of a valid witness, not just that one exists. `model_id` hashes the machine description. The closest example, sig.golf’s proofs about small RISC-V images plus security bounds, exported to 8.3 GB.',
+  /* 8 */ 'The model `M.Run` must accept every run the prover can prove: advice and uninitialised memory quantified, no tighter step bound, the whole canonical image decoded as the loader does. If it is the Lean form of the machine’s normative definition, any gap is a prover bug a fork fixes for every program. leanVM’s formal verification so far covers an earlier six-instruction machine.',
+  /* 9 */ 'Two kernels must both accept: con-ron, the Rust translation of con-leche (whose checking algorithm is proven sound; both ship with Lean 4.35.0), and nanoda. The wrapper’s rules: the environment is the prelude, then the machine description’s and the rules’ closures; no redeclaration unless identical to the existing one; roots with exactly the expected types; `prog` built as one `Nat` literal from the image bytes; the theorem written by the checker; axioms only `propext`, `Quot.sound` and `Classical.choice`.',
+  /* 10 */ 'The certificate is a leanVM proof of one checker run whose journal is `("LEAN_CERT_V1", spec_id, model_id, image_id, export_hash)`; `export_hash` hashes the Lean proof in Lean’s export format. The journal names no contract, so one certificate can approve the same program in every contract with the same pins. Proving a run this long needs continuations or a split checker, which leanVM lacks today.',
+  /* 11 */ 'The contract pins `spec_id`, `model_id`, `checker_id` (the checker’s `image_id`, which commits to its prelude and encoding) and the program scheme. Its approved set holds entries `(scheme, image_id)`, each recorded with its `export_hash` and the block that approved it. An immutable pool should keep the rules themselves in state, for example as a data contract’s code, since calldata expires under EIP-4444.',
+  /* 12 */ 'Frame 0 is the sender’s own `VERIFY` frame, approving it as sender and payer. Frame 1 is an EIP-8288 dependency frame (mode 4) with one triple `(scheme, data_hash, checker_id)`, where `data_hash` is the program lane’s digest of the certificate’s journal. Frame 2 is a `SENDER` frame calling `approve(image_id, export_hash)`. The certificate travels in the transaction’s mempool wrapper, never on chain.',
+  /* 13 */ '`approve` reads frame 1 with EIP-8141 frame introspection and checks that its mode is 4, that it holds one 96-byte triple, that the scheme byte is the pinned scheme, that `data_hash` equals the digest it recomputes from its pins and arguments, and that the key is `checker_id`. It records `(scheme, image_id)` with `export_hash` and the block number. The mode check matters: a triple in ordinary calldata is unproven.',
+  /* 14 */ 'The payment proof is an ordinary program-lane proof of one run of P on Alice’s witness. In a development test leanVM proved the spend in 0.151 s on 12 threads, proofs not yet zero knowledge; that is a development measurement, not a benchmark of a deployed system. Nothing about Lean happens per transaction, and Lean is never turned into a circuit.',
+  /* 15 */ 'The four frames are the program lane’s: EIP-8272’s recent root verifier frame, the pool’s `VERIFY` frame, the dependency frame with `(ERV64_V1, data_hash, image_id)` and the `SENDER` frame that appends the new note commitments. An EIP-8250 nonce key at sequence 0 can be consumed only once. `VERIFY` checks the lane’s usual conditions plus one: `(scheme, image_id)` is in its approved set. Validation may read only the sender’s storage, and the pool is the sender: one storage read, or none if the set is fixed in code.',
+  /* 16 */ 'Mempool nodes check the nonce keys, run the validation frames and verify the program proof against `(ERV64_V1, data_hash, image_id)`. EIP-8288 sets `AGGREGATION_INTERVAL` to 1000 ms: every second a node merges the proofs it holds into one recursive proof and forwards it. EIP-8141 allows one pending frame transaction per account and EIP-8250 keeps that limit; more, on disjoint nonce keys, is left to a future mempool policy.',
+  /* 17 */ 'The header field `recursive_stark` holds the block proof and `block_deps_hash`, a hash of the sorted, deduplicated dependencies’ `data_hash` and key (not the scheme), as in EIP-8288. A block is valid only if its block proof covers every dependency it declares and every transaction is valid. Upstream EIP-8288 defines only leanSPHINCS and reserves leanSTARK; the program scheme keyed by `image_id` exists only in the program-lane proposal.',
+  /* 18 */ 'A faster program needs only a new Lean proof and certificate: open and governed pools approve it, a fixed pool cannot. Removing a program invalidates the pool’s own pending transactions that use it. Each dependency names its program, so the anonymity set splits by program: keep few approved. A new prover, PCS, internal hash or field for the same machine leaves contracts unchanged, since the statement digest and `image_id` are fixed by the program lane and approvals are stored results. A new Lean release changes nothing on chain.',
+  /* 19 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. Two independent checkers take two approval transactions, since EIP-8288 allows one STARK dependency per transaction. A checker list that forks maintain, offered as a precompile, would let a fork drop a broken checker for every pool that opts in; `approve` can query it, and payments too if approvals record their `checker_id`, and no Lean enters consensus.',
+  /* 20 */ 'A checker bug needs both kernels to fail, or sits in the wrapper, its build or the logic; the remedy is to re-check approved proofs with a corrected checker. A prover bug can forge approvals that outlive the fix; governed pools remove them by recorded block number. A machine description narrower than the machine affects fixed pools too; if it is the machine’s official definition, any gap is a prover bug that a fork fixes for everyone. sig.golf’s proofs about small RISC-V images plus security bounds, 8.3 GB, took 3,666 s and 17.8 GB of memory to replay.',
+  /* 21 */ 'Ethereum enshrines only its machine (`ERV64_V1` in the program lane) and its prover. Before trusting a pool, a wallet reads its pins and approved set, checks that the published rules hash to `spec_id`, that `model_id` and `checker_id` are ones it recognises, and that the contract’s own code matches a known template, since the rules cover only the proving program. The chain records which programs were checked against which rules.',
+  /* 22 */ 'On chain: the pins, the approved set and each transaction’s dependency, all settled by one block proof. Off chain: the rules (published, ideally also kept in state), the Lean proof (authenticated by its `export_hash`), the witness (in the wallet) and the certificate (once, in a mempool wrapper). Still open in the design note: the size and cost of Lean proofs about compiled code, the checker as a provable RISC-V program (continuations or a split), a Lean model of the machine’s official definition, the scheme in the block statement and a standard checker.',
+  /* 23 */ 'Design note: Lean Specifications as Application Identity. Comparison: Lean Specifications in the Protocol vs in the Contract. Reviewed in internal AI-assisted audits 01 to 05. Still open: Lean proof size, the checker as a provable program, a Lean model of the machine, the scheme in the block statement.',
 ];
 
 C.pink = '#e48fb4'; C.orange = '#ff862f';
@@ -660,8 +662,11 @@ function CodeLine(cx, y, toks, o = {}) {
 const tokCopy = (L, i, col) => { const it = L.items[i]; return Txt(it.one ? it.xs + L.cw / 2 : it.xs, L.y, `<c>${it.s}</c>`, {size: L.size, fill: col, anchor: it.one ? 'middle' : 'start'}); };
 /* A tiny program proof, in the mempool. */
 function MiniProof(x, y) { const m = new M(x, y, null, 0); shape(m, rr(-14, -10, 28, 20, 5), {fill: C.stage, fo: 1}); shape(m, rr(-14, -10, 28, 20, 5), {stroke: C.gold, sw: 2.2, fill: C.gold, fo: 0.3, draw: false}); return m; }
-function travelB(from, to, t, d, target) {
-  const m = Badge(from[0], from[1]);
+/* A proof sent along a mempool edge: a small unlabelled token from node to node, drawn under the nodes' proof badges
+   (`under`), so it never covers a label. */
+function travelB(from, to, t, d, target, under) {
+  const m = MiniProof(from[0], from[1]);
+  if (under) WORLD.insertBefore(m.g, under.g);
   A.fadeIn(m, t, 0.2); A.to(m, t, d, {x: to[0], y: to[1]}); A.fadeOut(m, t + d - 0.15, 0.2);
   if (target) A.pulse(target, t + d - 0.1, 0.5, 1.3);
 }
@@ -677,7 +682,7 @@ const BEATS = [];
 let T = 0, B = 0;
 const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, t0, t1: T, cap: CAP[B], note: NOTE[B]}); B++; };
 
-/* Places: the hook, Alice and certification around x = 800; the pool contract around x = 2400; the mempool around 4000;
+/* Places: Alice, the problem, the rules and certification around x = 800; the pool contract around x = 2400; the mempool around 4000;
    the block around 5600; the upgrade questions at 7200, 8800 and 10400; the recap at 12000; the three layers at 13600. */
 
 /* 0. Title */
@@ -691,49 +696,17 @@ beat(0, 15.5, (t) => {
 });
 const POSTER = 3.0;
 
-/* 1. Problem: a pool that pins its code. The card sits where the pool contract will sit later. */
-const hk = Card(860, 50, 700, 290, C.teal, {fo: 0.05});
-const hkT = CT(hk, 28, 52, 'pool contract', {size: 32, fill: C.teal});
-const hkLock = Lock(...at(hk, 452, 42), C.teal, {parent: hk, k: 0.9});
-const hkImm = CT(hk, 676, 50, 'code never changes', {size: 22, fill: C.dim, anchor: 'end'});
-const hkDiv = CLine(hk, 20, 76, 680, 76, C.rule);
-const hkPinsL = CT(hk, 28, 118, 'pins, set at deployment', {size: 22, fill: C.dim});
-const hkImg = MC(hk, 350, 180, '<c>image_id</c>  ·  program <m>P</m>', C.teal, {w: 340, size: 24});
-const hkSpec = MC(hk, 350, 180, '<c>spec_id</c>  ·  the rules', C.blue, {w: 340, size: 24});
-const hkQ = Quest(...at(hk, 566, 180), C.yellow, {parent: hk, r: 24});
-const hkTrust = CT(hk, 350, 250, 'users must trust this code', {size: 22, fill: C.dim, anchor: 'middle'});
-const hkP2 = Mini(330, 230, C.teal, 'program <m>P</m>2', 'faster', null, {w: 300, h: 120});
-const hkA = Arrow(578, 230, 798, 230, C.teal, {sw: 2.5, head: 12});
-const hkX = Cross(826, 230, C.red, {k: 1.2});
-const hkFix = Txt(690, 284, 'the pin is fixed', {size: 22, fill: C.red, anchor: 'middle'});
-const upC = Card(860, 420, 700, 190, C.grey, {fo: 0.03});
-upC.parts = [IconKey(...at(upC, 52, 52), C.grey, {parent: upC, k: 1.1}), CT(upC, 96, 62, 'pool contract', {size: 30, fill: C.dim}), CT(upC, 676, 60, 'upgradable', {size: 22, fill: C.dim, anchor: 'end'}),
-  CLine(upC, 20, 92, 680, 92, C.rule), CT(upC, 28, 148, 'upgradable: trust whoever upgrades it', {size: 26})];
-beat(1, 19, (t) => {
-  A.fadeOut([title, sub1, sub2], t, 0.6);
-  A.draw(hk, t + 0.6, 1.2); A.write(hkT, t + 1.0, 0.7); A.fadeIn([hkLock, hkImm], t + 1.4, 0.5); A.draw(hkDiv, t + 1.3, 0.5);
-  A.fadeIn(hkPinsL, t + 2.0, 0.5);
-  A.fadeIn(hkImg, t + 2.6, 0.5, {s0: 0.6}); A.pulse(hkImg, t + 3.2, 0.6, 1.1);
-  A.fadeIn(hkTrust, t + 4.0, 0.5, {dy: 6});
-  reveal(hkP2, t + 5.4);
-  A.to(hkP2, t + 6.6, 0.8, {x: 420});
-  A.draw(hkA, t + 7.2, 0.6);
-  A.draw(hkX, t + 7.8, 0.3); A.pulse(hkX, t + 8.1, 0.5, 1.4); A.to(hkP2, t + 7.9, 0.4, {x: 396}); A.fadeIn(hkFix, t + 8.3, 0.5, {dy: 6});
-  reveal(upC, t + 10.2); A.to(upC, t + 12.6, 0.8, {o: 0.6});
-  A.fadeOut(hkTrust, t + 14.2, 0.5); A.to([hkA, hkX, hkFix, hkP2], t + 14.2, 0.6, {o: 0.45});
-  A.handoff(hkImg, hkSpec, t + 15.0, 0.8); A.fadeIn(hkQ, t + 15.6, 0.5, {s0: 0.4}); A.pulse(hkQ, t + 16.2, 0.6, 1.2);
-});
-
-/* 2. Rules: Alice pays Bob (as in PCS_open) */
+/* 1. Payment: Alice pays Bob (as in PCS_open) */
 const device = Card(40, 50, 1520, 556, C.grey, {fo: 0.025, r: 30, sw: 2.5});
+const DEVB = 50 + 556; // the device's bottom edge
 const devLbl = CT(device, 34, 50, 'Alice’s device', {size: 24, fill: C.dim});
 const notesLbl = Txt(470, 240, 'her notes in the pool', {size: 22, fill: C.dim, anchor: 'middle'});
 const n1 = NoteCard(470, 304, '0.9 ETH'), n2 = NoteCard(470, 400, '0.5 ETH');
 n1.base.s = n2.base.s = 1.25;
 const intent = Txt(1030, 350, 'Alice pays Bob 1.2 ETH', {size: 42, anchor: 'middle'});
 const intent2 = Txt(1030, 402, '0.19 ETH change, 0.01 ETH fee', {size: 24, anchor: 'middle', fill: C.dim});
-beat(2, 12.5, (t) => {
-  A.fadeOut([hk, upC, hkP2], t, 0.6);
+beat(1, 12.5, (t) => {
+  A.fadeOut([title, sub1, sub2], t, 0.6);
   A.draw(device, t + 0.5, 1.6); A.fadeIn(devLbl, t + 1.1, 0.6);
   A.fadeIn(notesLbl, t + 1.7, 0.5);
   A.fadeIn([n1, n2], t + 1.9, 0.7, {lag: 0.25, dx: -20});
@@ -741,32 +714,146 @@ beat(2, 12.5, (t) => {
   A.fadeIn(intent2, t + 5.4, 0.6, {dy: 8});
 });
 
-/* 3. Rules: witness and statement (as in PCS_open) */
-const wit = Card(110, 150, 450, 420, C.red);
+/* 2. Payment: witness and statement (as in PCS_open); the cards sit a little wider apart, leaving room for the checklist */
+const wit = Card(80, 150, 450, 420, C.red);
 const witT = CT(wit, 24, 50, 'witness', {size: 32, fill: C.red});
 const witTag = CT(wit, 426, 48, 'private', {size: 22, fill: C.dim, anchor: 'end'});
 const witLock = Lock(...at(wit, 330, 40), C.red, {parent: wit, k: 0.9});
 const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>'], ['Merkle paths', 'into the pool’s tree'], ['new notes', '1.2 ETH for Bob'], ['', '0.19 ETH change']]
   .map(([a, b], i) => Row(wit, 116 + 58 * i, a, b, 200, {size: 23, lx: 24}));
-const stm = Card(1040, 150, 450, 420, C.blue);
+const stm = Card(1070, 150, 450, 420, C.blue);
 const stmT = CT(stm, 24, 50, 'statement', {size: 32, fill: C.blue});
 const stmTag = CT(stm, 426, 48, 'public', {size: 22, fill: C.dim, anchor: 'end'});
 const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, not which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['binding', 'to this transaction', '']];
 const stmRows = STM.map(([a, b, g], i) => [Row(stm, 104 + 62 * i, a, b, 200, {size: 23, lx: 24}), ...(g ? [CT(stm, 24, 130 + 62 * i, g, {size: 20, fill: C.dim})] : [])]);
-beat(2, 16, (t) => {
+beat(1, 16, (t) => {
   A.to(intent, t, 1.0, {x: 800, y: 112, s: 0.8});
   A.fadeOut([intent2, notesLbl], t, 0.5);
-  A.draw(wit, t + 0.3, 1.1); A.write(witT, t + 0.8, 0.7); A.fadeIn(witTag, t + 1.1, 0.5);
-  A.to([n1, n2], t + 0.9, 1.0, {x: 392, y: 268, s: 0.35}); A.fadeOut([n1, n2], t + 1.6, 0.4);
-  A.fadeIn(witRows, t + 1.8, 0.5, {lag: 0.4, dx: -12});
-  A.fadeIn(witLock, t + 4.2, 0.5); A.pulse(witLock, t + 4.7, 0.8, 1.35);
+  /* The two notes shrink into the witness's first row, side by side, and are gone before the rows appear. */
+  A.to([n1, n2], t + 0.1, 0.45, {s: 0.5});
+  A.to(n1, t + 0.5, 0.8, {x: 320, y: 262, s: 0.4}); A.to(n2, t + 0.5, 0.8, {x: 480, y: 262, s: 0.4}); A.fadeOut([n1, n2], t + 1.0, 0.35);
+  A.draw(wit, t + 0.9, 1.1); A.write(witT, t + 1.4, 0.7); A.fadeIn(witTag, t + 1.7, 0.5);
+  A.fadeIn(witRows, t + 2.2, 0.5, {lag: 0.4, dx: -12});
+  A.fadeIn(witLock, t + 4.4, 0.5); A.pulse(witLock, t + 4.9, 0.8, 1.35);
   A.draw(stm, t + 6.4, 1.1); A.write(stmT, t + 6.9, 0.7); A.fadeIn(stmTag, t + 7.2, 0.5);
   stmRows.forEach(([r, g], i) => { A.fadeIn(r, t + 7.8 + i * 1.3, 0.5, {dx: -12}); if (g) A.fadeIn(g, t + 8.2 + i * 1.3, 0.5); });
 });
 
-/* 4. Rules: the rules, a short Lean definition about the statement and the witness */
+/* 3. Payment: what the proof must show (as PCS_open's checklist between witness and statement), and to whom */
+const shows = Txt(800, 204, 'the proof shows', {size: 26, anchor: 'middle'});
+const SHOW = ['her notes are in the pool’s tree', 'she holds their key', 'each nullifier comes from her key and its note', 'the new notes are sealed correctly', '0.9 + 0.5 = 1.2 + 0.19 + 0.01'];
+const SX = 588;
+const showRows = SHOW.map((s, i) => [Check(SX, 256 + 46 * i, C.green, {k: 0.7}), Txt(SX + 20, 264 + 46 * i, s, {size: 22})]);
+const rulesBox = new M(806, 348, null, 0); shape(rulesBox, rr(-246, -122, 492, 244, 14), {stroke: C.blue, sw: 2, dash: '8 7', fill: C.blue, fo: 0.04});
+const rulesBoxL = Txt(806, 506, 'the pool’s rules', {size: 26, fill: C.blue, anchor: 'middle'});
+const eth = Card(640, 700, 320, 76, C.grey, {fo: 0.06});
+const ethT = CT(eth, 160, 48, 'nodes that check it', {size: 26, anchor: 'middle'});
+/* Point where a bent Arrow crosses height y (searched along the quadratic curve). */
+const qAtY = (x1, y1, x2, y2, bend, y) => {
+  const L = Math.hypot(x2 - x1, y2 - y1), cx = (x1 + x2) / 2 - (y2 - y1) / L * bend, cy = (y1 + y2) / 2 + (x2 - x1) / L * bend;
+  let best = [x1, y1];
+  for (let i = 0; i <= 400; i++) { const s = i / 400, u = 1 - s, px = u * u * x1 + 2 * u * s * cx + s * s * x2, py = u * u * y1 + 2 * u * s * cy + s * s * y2; if (Math.abs(py - y) < Math.abs(best[1] - y)) best = [px, py]; }
+  return best;
+};
+const aConv = Arrow(1250, 576, 912, 699, C.blue, {bend: -40});
+const cvm = qAtY(1250, 576, 912, 699, -40, DEVB);
+const lConv = Txt(cvm[0] + 30, cvm[1] + 40, 'convince', {size: 22, fill: C.blue});
+const aHide = Arrow(350, 576, 688, 699, C.red, {bend: 40});
+const hm = qAtY(350, 576, 688, 699, 40, DEVB);
+const xHide = Cross(hm[0], hm[1], C.red, {k: 1.2});
+const lHide = Txt(hm[0] - 28, hm[1] + 40, 'not revealed', {size: 22, fill: C.dim, anchor: 'end'});
+beat(1, 17, (t) => {
+  A.write(shows, t + 0.4, 0.8);
+  showRows.forEach(([c, s], i) => { A.draw(c, t + 1.4 + i * 1.2, 0.35); A.fadeIn(s, t + 1.5 + i * 1.2, 0.5, {dx: -8}); });
+  A.fadeIn(rulesBox, t + 7.6, 0.6); A.fadeIn(rulesBoxL, t + 7.9, 0.5, {dy: 6});
+  A.draw(eth, t + 9.4, 0.9); A.fadeIn(ethT, t + 9.8, 0.5);
+  A.draw(aConv, t + 10.4, 0.9); A.fadeIn(lConv, t + 11.0, 0.5);
+  A.draw(aHide, t + 12.0, 0.9); A.draw(xHide, t + 12.8, 0.4); A.to(aHide, t + 13.0, 0.5, {o: 0.35}); A.fadeIn(lHide, t + 13.1, 0.5);
+});
+
+/* 4. Problem: a program checks the rules, and the pool's contract pins that program. The contract card sits where it will sit later. */
 const witC = Mini(330, 724, C.red, 'witness', 'her notes, key, Merkle paths', 'and her new notes', {w: 340, s1: 20});
 witC.parts.push(Lock(...at(witC, 300, 36), C.red, {parent: witC, k: 0.8}));
+witC.base.x = 210; witC.base.y = 600;
+const prog = ProgMini(640, 600);
+const aWP = Arrow(386, 600, 487, 600, C.red), fWP = Flash(aWP.pathD, C.red);
+const aPV = Arrow(796, 600, 1336, 600, C.gold), fPV = Flash(aPV.pathD, C.gold);
+const lvLbl = Txt(1063, 580, 'leanVM: Ethereum’s RISC-V prover', {size: 24, fill: C.gold, anchor: 'middle'});
+const lvNote = Txt(1063, 638, 'unrelated to the Lean language, despite the name', {size: 20, fill: C.dim, anchor: 'middle'});
+const proofB = Badge(1400, 600, {k: 1.2});
+const progLang = Txt(640, 720, 'written in any language, e.g. Rust  →  compiled to RISC-V', {size: 22, fill: C.dim, anchor: 'middle'});
+const hashChip = MChip(640, 452, '<c>image_id</c>  =  hash of <m>P</m>', C.teal, {w: 300, size: 22});
+const pc = Card(860, 50, 700, 290, C.teal, {fo: 0.05});
+const pcT = CT(pc, 28, 52, 'pool contract', {size: 32, fill: C.teal});
+const pcLock = Lock(...at(pc, 452, 42), C.teal, {parent: pc, k: 0.9});
+const pcImm = CT(pc, 676, 50, 'code never changes', {size: 22, fill: C.dim, anchor: 'end'});
+const pcDiv = CLine(pc, 20, 76, 680, 76, C.rule);
+const pcPinsL = CT(pc, 28, 118, 'pins, set at deployment', {size: 22, fill: C.dim});
+const pcImg = MC(pc, 350, 180, '<c>image_id</c>  ·  program <m>P</m>', C.teal, {w: 340, size: 24});
+const pcSpec = MC(pc, 350, 180, '<c>spec_id</c>  ·  the rules', C.blue, {w: 340, size: 24});
+const pcQ = Quest(...at(pc, 566, 180), C.yellow, {parent: pc, r: 24});
+const aPin = Arrow(796, 440, 1032, 238, C.teal, {sw: 2.5, head: 12});
+/* The pipeline starts centred on the stage and moves down to make room for the contract. */
+const pipe = [witC, prog, aWP, fWP, aPV, fPV, lvLbl, lvNote, proofB, progLang];
+pipe.forEach((m) => { m.base.y -= 150; });
+beat(4, 18, (t) => {
+  A.fadeOut([device, devLbl, intent, stm, shows, showRows, rulesBox, rulesBoxL, eth, aConv, lConv, aHide, xHide, lHide], t, 0.6);
+  /* The witness card shrinks toward its compact form and is gone before the compact card appears. */
+  A.to(wit, t + 0.3, 0.9, {x: 210, y: 450, s: 0.6}); A.fadeOut(wit, t + 0.8, 0.4); appear(witC, t + 1.3);
+  reveal(prog, t + 2.0);
+  A.fadeIn(progLang, t + 3.0, 0.5, {dy: 6});
+  A.draw(aWP, t + 4.0, 0.5); A.flash(fWP, t + 4.5, 0.6);
+  A.draw(aPV, t + 5.4, 0.6); A.fadeIn(lvLbl, t + 5.7, 0.5); A.flash(fPV, t + 6.0, 0.6);
+  A.fadeIn(proofB, t + 6.5, 0.5, {s0: 0.4}); A.pulse(proofB, t + 7.0, 0.6, 1.15);
+  A.fadeIn(lvNote, t + 7.8, 0.5, {dy: 6});
+  pipe.forEach((m) => A.to(m, t + 9.0, 1.0, {y: m.base.y + 150}));
+  A.draw(pc, t + 10.0, 1.2); A.write(pcT, t + 10.4, 0.7); A.fadeIn([pcLock, pcImm], t + 10.8, 0.5); A.draw(pcDiv, t + 10.7, 0.5);
+  A.fadeIn(pcPinsL, t + 11.4, 0.5);
+  A.fadeIn(hashChip, t + 12.6, 0.5, {s0: 0.6});
+  A.draw(aPin, t + 13.4, 0.7); A.fadeIn(pcImg, t + 13.9, 0.5, {s0: 0.6}); A.pulse(pcImg, t + 14.5, 0.6, 1.1);
+});
+
+/* 5. Problem: that pin. Users must trust P's code; an immutable pool can never switch; an upgradable one asks for trust in its upgrader */
+const pCode = Pile(500, 606, 3, {w: 140, h: 180, col: C.teal, lines: 7});
+const pQ = Quest(500, 452, C.yellow, {r: 26});
+const pWho = Txt(540, 461, 'who reads this?', {size: 24, fill: C.yellow});
+/* A numbered problem label: a small circled number and a line of text. */
+function NumLbl(x, y, n, s, col) {
+  const m = new M(x, y, null, 0);
+  shape(m, circ(0, -8, 15), {stroke: col, sw: 2.2, fill: col, fo: 0.12, draw: false});
+  rich(m.inner, 0, 0, String(n), {size: 20, fill: col, anchor: 'middle'});
+  rich(m.inner, 28, 0, s, {size: 24});
+  return m;
+}
+const pLbl1 = NumLbl(118, 768, 1, 'users must trust the code of <m>P</m>', C.red);
+const p2 = Mini(330, 230, C.teal, 'program <m>P</m> 2', 'faster', null, {w: 300, h: 120});
+const p2A = Arrow(578, 230, 798, 230, C.teal, {sw: 2.5, head: 12});
+const p2X = Cross(826, 230, C.red, {k: 1.2});
+const p2Fix = Txt(690, 284, 'the pin is fixed', {size: 22, fill: C.red, anchor: 'middle'});
+const pLbl2 = NumLbl(286, 352, 2, 'an immutable pool can never switch', C.red);
+const upC = Card(900, 470, 640, 150, C.grey, {fo: 0.03});
+upC.parts = [IconKey(...at(upC, 50, 52), C.grey, {parent: upC, k: 1.1}), CT(upC, 92, 62, 'upgradable instead?', {size: 26, fill: C.dim}),
+  CT(upC, 28, 118, 'then trust whoever upgrades it', {size: 24})];
+const probAll = [pCode, pQ, pWho, pLbl1, p2, p2A, p2X, p2Fix, pLbl2, upC, prog];
+beat(4, 21, (t) => {
+  A.fadeOut([witC, aWP, aPV, lvLbl, lvNote, proofB, progLang, hashChip, aPin], t, 0.5);
+  A.pulse(pcImg, t + 0.6, 0.6, 1.12);
+  A.to(prog, t + 0.8, 1.0, {x: 250});
+  A.fadeIn(pCode, t + 2.0, 0.6, {dx: -40}); A.fadeIn(pQ, t + 2.8, 0.5, {s0: 0.4}); A.fadeIn(pWho, t + 3.2, 0.5, {dx: -8});
+  A.fadeIn(pLbl1, t + 4.2, 0.5, {dy: 6});
+  reveal(p2, t + 6.0);
+  A.to(p2, t + 7.0, 0.8, {x: 420});
+  A.draw(p2A, t + 7.6, 0.6);
+  A.draw(p2X, t + 8.2, 0.3); A.pulse(p2X, t + 8.5, 0.5, 1.4); A.to(p2, t + 8.3, 0.4, {x: 396}); A.fadeIn(p2Fix, t + 8.7, 0.5, {dy: 6});
+  A.fadeIn(pLbl2, t + 9.6, 0.5, {dy: 6});
+  reveal(upC, t + 11.6);
+  A.to(probAll, t + 15.4, 0.6, {o: 0.35});
+  /* The pin swaps in two steps, so the two labels never sit on top of each other. */
+  A.fadeOut(pcImg, t + 16.2, 0.4); A.fadeIn(pcSpec, t + 16.6, 0.5, {s0: 0.8});
+  A.fadeIn(pcQ, t + 17.2, 0.5, {s0: 0.4}); A.pulse(pcQ, t + 17.8, 0.6, 1.2);
+});
+
+/* 6. Rules: the rules, a short Lean definition about the statement and the witness; then the question for P */
 const stmC = Mini(1270, 724, C.blue, 'statement', 'root, nullifiers, new notes,', 'fee, bound to this transaction', {w: 360, s1: 20});
 const rules = Card(370, 130, 860, 400, C.blue);
 const rulesT = CT(rules, 30, 50, 'rules', {size: 32, fill: C.blue});
@@ -777,48 +864,27 @@ const RLINES = ['notes in the pool’s tree', 'owned by the spending key', 'null
 const rulesL = RLINES.map((s, i) => CT(rules, 80, 172 + 44 * i, s + (i < 4 ? '  <k=blueL><c>∧</c></k>' : ''), {size: 26}));
 const rulesOnce = Txt(800, 592, 'written once by the pool’s developers  ·  never run', {size: 24, fill: C.dim, anchor: 'middle'});
 const lkW = Line(560, 536, 400, 644, C.red, {dash: '8 7'}), lkS = Line(1040, 536, 1200, 644, C.blue, {dash: '8 7'});
-beat(2, 18, (t) => {
-  A.fadeOut([device, devLbl, intent], t, 0.6);
-  A.to(wit, t + 0.3, 1.0, {x: 330, y: 724, s: 0.6}); A.fadeOut(wit, t + 0.9, 0.4); appear(witC, t + 1.0);
-  A.to(stm, t + 0.3, 1.0, {x: 1270, y: 724, s: 0.6}); A.fadeOut(stm, t + 0.9, 0.4); appear(stmC, t + 1.0);
+const rulesC = RulesMini(800, 250);
+const qLink = Line(800, 330, 800, 556, C.faint, {dash: '8 8'});
+const quest = Quest(800, 443, C.yellow);
+const qTxt = Txt(846, 452, 'does <m>P</m>  follow the rules?', {size: 28});
+beat(6, 23, (t) => {
+  A.fadeOut([pc, pcSpec, pcQ, ...probAll], t, 0.6);
+  A.to(witC, t + 0.7, 0.01, {x: 330, y: 724}, {e: lin}); A.to(prog, t + 0.7, 0.01, {x: 800, y: 640}, {e: lin});
+  appear(witC, t + 1.0); appear(stmC, t + 1.0);
   A.draw(rules, t + 1.6, 1.0); A.write(rulesT, t + 2.0, 0.6); A.fadeIn(rulesTag, t + 2.3, 0.5); A.draw(rulesDiv, t + 2.2, 0.5);
   A.write(rulesDef, t + 2.9, 1.3);
   rulesL.forEach((m, i) => A.fadeIn(m, t + 4.6 + i * 1.2, 0.5, {dx: -10}));
   A.draw([lkW, lkS], t + 10.8, 0.7, {lag: 0.2}); A.pulse([witC, stmC], t + 11.4, 0.7, 1.06);
   A.fadeIn(rulesOnce, t + 12.6, 0.6, {dy: 8});
+  /* The rules shrink to their compact card (gone before the compact card appears), and the question for P is asked. */
+  A.fadeOut([witC, stmC, lkW, lkS, rulesOnce], t + 15.0, 0.5);
+  A.to(rules, t + 15.4, 1.0, {x: 800, y: 250, s: 0.37}); A.fadeOut(rules, t + 15.9, 0.4); appear(rulesC, t + 16.4);
+  appear(prog, t + 17.0);
+  A.draw(qLink, t + 18.4, 0.6); A.fadeIn(quest, t + 18.8, 0.5, {s0: 0.4}); A.fadeIn(qTxt, t + 19.2, 0.5, {dx: -8});
 });
 
-/* 5. Rules: the program wallets actually prove */
-const rulesC = RulesMini(720, 140);
-const prog = ProgMini(720, 520);
-const aWP = Arrow(434, 520, 564, 520, C.red), fWP = Flash(aWP.pathD, C.red);
-const aPV = Arrow(876, 520, 1300, 520, C.gold), fPV = Flash(aPV.pathD, C.gold);
-const lvLbl = Txt(1088, 500, 'leanVM: Ethereum’s RISC-V prover', {size: 24, fill: C.gold, anchor: 'middle'});
-const lvNote = Txt(886, 562, 'unrelated to the Lean language, despite the name', {size: 20, fill: C.dim});
-const proofB = Badge(1400, 520, {k: 1.2});
-const progLang = Txt(720, 636, 'written in any language, e.g. Rust  →  compiled to RISC-V', {size: 22, fill: C.dim, anchor: 'middle'});
-const qLink = Line(720, 220, 720, 434, C.faint, {dash: '8 8'});
-const quest = Quest(720, 327, C.yellow);
-const qTxt = Txt(766, 336, 'does <m>P</m>  follow the rules?', {size: 28});
-const hashChip = MChip(720, 694, '<c>image_id</c>  =  hash of <m>P</m>', C.teal, {w: 300, size: 22});
-const callback = Txt(746, 780, 'a code-pinned pool would simply trust this hash', {size: 24, fill: C.dim, anchor: 'middle'});
-const cbLock = Lock(466, 772, C.teal, {k: 0.8});
-beat(2, 19, (t) => {
-  A.fadeOut([stmC, lkW, lkS, rulesOnce], t, 0.5);
-  A.to(rules, t + 0.3, 1.0, {x: 720, y: 140, s: 0.37}); A.fadeOut(rules, t + 0.8, 0.4); appear(rulesC, t + 0.9);
-  A.to(witC, t + 0.4, 1.2, {x: 260, y: 520});
-  reveal(prog, t + 1.8);
-  A.fadeIn(progLang, t + 2.8, 0.5, {dy: 6});
-  A.draw(aWP, t + 3.8, 0.5); A.flash(fWP, t + 4.3, 0.6);
-  A.draw(aPV, t + 5.2, 0.6); A.fadeIn(lvLbl, t + 5.5, 0.5); A.flash(fPV, t + 5.8, 0.6);
-  A.fadeIn(proofB, t + 6.3, 0.5, {s0: 0.4}); A.pulse(proofB, t + 6.8, 0.6, 1.15);
-  A.fadeIn(lvNote, t + 7.6, 0.5, {dy: 6});
-  A.fadeIn(hashChip, t + 9.4, 0.5, {s0: 0.6});
-  A.fadeIn([cbLock, callback], t + 10.8, 0.6, {dy: 8});
-  A.draw(qLink, t + 12.6, 0.6); A.fadeIn(quest, t + 13.0, 0.5, {s0: 0.4}); A.fadeIn(qTxt, t + 13.4, 0.5, {dx: -8});
-});
-
-/* 6. Certify: the Lean proof of one theorem, and why it names the witness */
+/* 7. Certify: the Lean proof of one theorem, and why it names the witness */
 const LP = LeanProof(800, 170);
 const lpL = [Line(744, 160, 424, 160, C.purple), Line(856, 160, 1186, 160, C.purple)];
 const lpAbout = [Txt(584, 146, 'about', {size: 20, fill: C.dim, anchor: 'middle'}), Txt(1020, 146, 'about', {size: 20, fill: C.dim, anchor: 'middle'})];
@@ -834,29 +900,29 @@ const lazy = Card(950, 540, 360, 200, C.teal, {fo: 0.05});
 const LZ = ['checks membership', 'checks ownership', 'checks the nullifiers', 'checks the balance'];
 lazy.parts = [CT(lazy, 22, 42, 'lazy <m>P</m>', {size: 28, fill: C.teal}), ...LZ.map((s, i) => CT(lazy, 22, 82 + 30 * i, s, {size: 22, fill: i === 2 ? C.dim : C.ink}))];
 const lzStrike = Line(968, 675, 1182, 675, C.red, {sw: 3});
-const aGL = Arrow(580, 600, 936, 618, C.faint, {sw: 2.2, head: 11});
+const aGL = Arrow(580, 600, 947, 618, C.faint, {sw: 2.2, head: 11});
 const lzOk = Check(1352, 610, C.green, {k: 1.5}), lzBad = Check(1352, 610, C.red, {k: 1.5});
 const lzTxt = Txt(1130, 780, 'would wrongly pass', {size: 24, fill: C.red, anchor: 'middle'});
 const wMid = (THM.items[8].cx + THM.items[14].cx) / 2;
 const pillW = Tag(wMid, 542, 'the witness <m>P</m>  was given', C.red, {size: 24, w: 330});
-beat(6, 24, (t) => {
-  A.fadeOut([witC, aWP, aPV, lvLbl, lvNote, proofB, hashChip, progLang, callback, cbLock, qLink, quest, qTxt], t, 0.5);
+beat(7, 24, (t) => {
+  A.fadeOut([qLink, quest, qTxt], t, 0.5);
   A.to(rulesC, t + 0.4, 1.2, {x: 260, y: 160}); A.to(prog, t + 0.4, 1.2, {x: 1340, y: 160});
   A.fadeIn(LP, t + 1.6, 0.6, {s0: 0.6});
   A.draw(lpL, t + 2.4, 0.6, {lag: 0.2}); A.fadeIn(lpAbout, t + 2.8, 0.5, {lag: 0.2});
   A.fadeIn(thmH, t + 3.6, 0.5); A.write(THM.parts, t + 4.0, 0.45, {lag: 0.1});
   A.fadeIn(thmG, t + 6.2, 0.6, {dy: 8});
   A.fadeIn(pillAll, t + 8.2, 0.5, {s0: 0.8});
-  WI.forEach((i, k) => { A.handoff(THM.items[i].m, wRed[k], t + 10.0, 0.4); circumC(THM.items[i].cx, 350, 26, 34, C.red, t + 10.2, {hold: 1.4}); });
+  WI.forEach((i, k) => { A.fadeOut(THM.items[i].m, t + 10.0, 0.2); A.fadeIn(wRed[k], t + 10.2, 0.25); circumC(THM.items[i].cx, 350, 18, 34, C.red, t + 10.2, {hold: 1.4}); });
   A.fadeIn(ghH, t + 11.4, 0.5); A.fadeIn(GH.parts, t + 11.6, 0.6, {to: 0.75, lag: 0.05}); A.fadeIn(ghPill, t + 12.3, 0.5, {s0: 0.8});
   reveal(lazy, t + 13.8); A.draw(lzStrike, t + 15.0, 0.4);
   A.draw(aGL, t + 15.8, 0.6); A.draw(lzOk, t + 16.4, 0.4); A.pulse(lzOk, t + 16.8, 0.5, 1.3);
   A.handoff(lzOk, lzBad, t + 17.6, 0.3); A.pulse(lzBad, t + 17.6, 0.6, 1.4); A.fadeIn(lzTxt, t + 17.9, 0.5, {dy: 6});
   A.fadeOut([ghH, GH.parts, ghPill, lazy, lzStrike, aGL, lzBad, lzTxt], t + 19.6, 0.6);
-  A.fadeIn(pillW, t + 20.4, 0.5, {s0: 0.8}); WI.forEach((i) => circumC(THM.items[i].cx, 350, 26, 34, C.red, t + 20.6, {hold: 1.2}));
+  A.fadeIn(pillW, t + 20.4, 0.5, {s0: 0.8}); WI.forEach((i) => circumC(THM.items[i].cx, 350, 18, 34, C.red, t + 20.6, {hold: 1.2}));
 });
 
-/* 7. Certify: the theorem is only as strong as its machine description */
+/* 8. Certify: the theorem is only as strong as its machine description */
 const MR = THM.items[4], DS = 86;
 const leftT = THM.items.slice(0, 4).filter(Boolean).map((it) => it.m);
 const rightT = [...THM.items.slice(5).filter(Boolean).map((it) => it.m), ...wRed];
@@ -871,7 +937,7 @@ const stTxt = Txt(1036, 566, '“follows the rules”', {size: 24, fill: C.red})
 const mrLock = Lock(MR.cx, 300, C.pink, {k: 1.0});
 const mrChip = Chip(MR.cx, 420, 'model_id', C.pink, {w: 170, size: 22});
 const bestPill = Tag(800, 560, 'best: the machine’s official definition, in Lean', C.pink, {size: 24});
-beat(6, 19, (t) => {
+beat(7, 19, (t) => {
   A.fadeOut([thmH, thmG, pillAll, pillW], t, 0.5);
   A.to(MR.m, t + 1.0, 0.7, {y: THM.y - 70}); A.fadeOut(MR.m, t + 1.1, 0.5);
   leftT.forEach((m) => A.to(m, t + 1.2, 0.8, {x: m.base.x - DS})); rightT.forEach((m) => A.to(m, t + 1.2, 0.8, {x: m.base.x + DS}));
@@ -889,7 +955,7 @@ beat(6, 19, (t) => {
   A.fadeIn(bestPill, t + 15.0, 0.6, {s0: 0.8});
 });
 
-/* 8. Certify: the Lean checker, built around an attack */
+/* 9. Certify: the Lean checker, built around an attack */
 const machC = MachMini(620, 160);
 const chk = Card(160, 330, 1280, 400, C.purple, {fo: 0.05});
 const chkT = CT(chk, 30, 52, 'Lean checker', {size: 32, fill: C.purple});
@@ -910,10 +976,10 @@ const forgeBg = new M(0, 18, forged, 1); shape(forgeBg, rr(-92, -17, 184, 34, 8)
 const forgeChip = Chip(1340, 188, 'Nat.add := …', C.red, {w: 184, size: 20, o: 1, parent: forged});
 forgeChip.base.x = 0; forgeChip.base.y = 18;
 const forgeX = Cross(1340, 150, C.red, {k: 2.6, sw: 6});
-beat(6, 19, (t) => {
+beat(7, 19, (t) => {
   A.fadeOut([...THM.parts, ...wRed, mrLock, bestPill, lpL, lpAbout], t, 0.5);
-  A.to(prog, t + 0.4, 1.2, {x: 980, y: 160}); A.to(LP, t + 0.4, 1.2, {x: 1500, y: 170, o: 0.3});
-  A.to(mrChip, t + 0.4, 1.0, {x: 620, y: 160}); A.fadeOut(mrChip, t + 1.2, 0.3); appear(machC, t + 1.3);
+  A.to(prog, t + 0.4, 1.2, {x: 980, y: 160}); A.to(LP, t + 0.4, 1.2, {x: 1520, y: 170, o: 0.3});
+  A.to(mrChip, t + 0.4, 1.0, {x: 620, y: 160}); A.fadeOut(mrChip, t + 1.1, 0.3); appear(machC, t + 1.5);
   A.draw(chk, t + 1.9, 1.0); A.write(chkT, t + 2.3, 0.7); A.fadeIn(chkS, t + 2.6, 0.5); A.draw(chkDiv, t + 2.5, 0.5);
   A.fadeIn(kern, t + 3.0, 0.5, {lag: 0.2, s0: 0.8}); A.fadeIn(kernL, t + 3.3, 0.4);
   A.draw(aIn, t + 3.6, 0.5, {lag: 0.15});
@@ -936,20 +1002,21 @@ Txt(64, 857, '<k=purple>Lean proof</k>: about every run  ·  large  ·  checked 
 const legB = new M(40, 879, LEG, 1); shape(legB, rr(-15, -9, 30, 18, 6), {stroke: C.gold, sw: 2.2, fill: C.gold, fo: 0.25, draw: false});
 Txt(64, 886, '<k=gold>machine proof</k>: one run happened  ·  small  ·  fast', {size: 20, fill: C.dim, parent: LEG, o: 1});
 
-/* 9. Certify: the bridge. The checker is just a program; leanVM proves its run; the certificate and its public output */
+/* 10. Certify: the bridge. The checker is just a program; leanVM proves its run; the certificate and its public output */
 const legI = [Txt(480, 752, 'about every run  ·  large  ·  checked once', {size: 22, fill: C.dim, anchor: 'middle'}),
   Txt(1120, 752, 'one run happened  ·  small  ·  fast', {size: 22, fill: C.dim, anchor: 'middle'})];
 const mpI = Badge(1120, 600, {label: 'machine proof'});
 const flyPile = Pile(480, 546, 3, {w: 134, h: 168, col: C.purple, lines: 4});
 const chkCp = Mini(250, 270, C.purple, 'Lean checker', 'its run, once', null, {w: 300, h: 120, s1: 22, c1: C.dim});
 const chkC = Mini(250, 270, C.teal, 'Lean checker', 'the checker is just a program', null, {w: 360, h: 150, s1: 22, code: true});
-const aCV = Arrow(436, 270, 600, 270, C.gold), fCV = Flash(aCV.pathD, C.gold);
+const aCV = Arrow(436, 270, 617, 270, C.gold), fCV = Flash(aCV.pathD, C.gold);
 const lvLbl2 = Txt(518, 250, 'leanVM', {size: 24, fill: C.gold, anchor: 'middle'});
 const contTxt = Txt(518, 396, 'needs continuations, which leanVM lacks today', {size: 20, fill: C.dim, anchor: 'middle'});
 const certB = Badge(722, 270, {k: 1.25, label: 'certificate'});
-const certBurst = Burst(722, 270, C.gold, {r1: 110, r2: 132});
+const certBurst = Burst(722, 270, C.gold, {r1: 112, r2: 128});
+certBurst.base.r = 15; // no ray lands on the arrow or the leanVM label
 const certLbl0 = Txt(1838, 698, 'the certificate for program <m>P</m>', {size: 22, fill: C.dim});
-const aCO = Arrow(826, 270, 934, 270, C.gold);
+const aCO = Arrow(826, 270, 938, 270, C.gold);
 const out = Card(940, 90, 600, 420, C.gold, {fo: 0.05});
 const outT = CT(out, 26, 50, 'public output', {size: 28, fill: C.gold});
 const outDiv = CLine(out, 18, 72, 582, 72, C.rule);
@@ -957,22 +1024,22 @@ const out0 = CT(out, 26, 116, '<c>"LEAN_CERT_V1"</c>', {size: 22, fill: C.dim});
 const OUTR = [['spec_id', C.blue, 'the rules'], ['model_id', C.pink, 'the machine description'], ['image_id', C.teal, 'the program <m>P</m>'], ['export_hash', C.purple, 'the Lean proof']];
 const outR = OUTR.map(([h, c, s], i) => [MC(out, 130, 172 + 62 * i, `<c>${h}</c>`, c, {w: 200, size: 22}), CT(out, 252, 180 + 62 * i, s, {size: 26})]);
 const offTxt = Txt(280, 664, 'the Lean proof stays off chain', {size: 24, fill: C.dim});
-const onlyH = Line(262, 600, 962, 452, C.purple, {dash: '7 7', sw: 2});
-const onlyHL = Txt(640, 500, 'only its hash', {size: 22, fill: C.purple, anchor: 'middle'});
-beat(6, 23, (t) => {
+const onlyH = Line(262, 600, 969, 451, C.purple, {dash: '7 7', sw: 2});
+const onlyHL = Txt(640, 486, 'only its hash', {size: 22, fill: C.purple, anchor: 'middle'});
+beat(7, 23, (t) => {
   A.fadeOut([rulesC, machC, prog, aIn], t, 0.5);
-  A.to(chk, t + 0.4, 1.0, {x: 250, y: 270, s: 0.24}); A.fadeOut(chk, t + 0.9, 0.4); appear(chkCp, t + 1.0);
+  A.to(chk, t + 0.4, 1.0, {x: 250, y: 270, s: 0.24}); A.fadeOut(chk, t + 0.9, 0.4); appear(chkCp, t + 1.4);
   A.to(LP, t + 1.2, 1.4, {x: 480, y: 560, s: 1.4});
   A.fadeIn(mpI, t + 2.2, 0.5, {s0: 0.4}); A.pulse(mpI, t + 2.7, 0.5, 1.12);
   A.fadeIn(legI[0], t + 3.0, 0.5, {dy: 8}); A.fadeIn(legI[1], t + 4.0, 0.5, {dy: 8});
   A.fadeIn(flyPile, t + 6.2, 0.05); A.to(flyPile, t + 6.2, 1.2, {x: 40, y: 846, s: 0.15}); A.fadeOut(flyPile, t + 7.2, 0.3);
-  A.to(mpI, t + 6.3, 1.2, {x: 40, y: 879, s: 0.2}); A.fadeOut(mpI, t + 7.3, 0.3);
-  A.to(legI[0], t + 6.2, 1.2, {x: 300, y: 857, s: 0.9}); A.to(legI[1], t + 6.3, 1.2, {x: 280, y: 886, s: 0.9}); A.fadeOut(legI, t + 7.2, 0.3);
-  A.fadeIn(LEG, t + 7.2, 0.5);
+  A.to(mpI, t + 6.3, 1.2, {x: 40, y: 879, s: 0.2}); A.fadeOut(mpI, t + 6.8, 0.4);
+  A.to(legI[0], t + 6.2, 1.2, {x: 300, y: 857, s: 0.9}); A.to(legI[1], t + 6.3, 1.2, {x: 280, y: 886, s: 0.9}); A.fadeOut(legI, t + 6.6, 0.4); // gone before they reach each other or the legend
+  A.fadeIn(LEG, t + 7.3, 0.5);
   A.to(LP, t + 7.8, 1.2, {x: 200, y: 640, s: 1});
-  A.handoff(chkCp, chkC, t + 8.6, 0.6); A.fadeOut(chkCp.parts, t + 8.6, 0.4); A.fadeIn(chkC.parts, t + 8.9, 0.5, {lag: 0.15}); A.pulse(chkC, t + 9.2, 0.6, 1.06);
+  A.handoff(chkCp, chkC, t + 8.6, 0.6); A.fadeOut(chkCp.parts, t + 8.6, 0.3); A.fadeIn(chkC.parts, t + 9.0, 0.5, {lag: 0.15}); A.pulse(chkC, t + 9.2, 0.6, 1.06);
   A.draw(aCV, t + 10.4, 0.6); A.fadeIn(lvLbl2, t + 10.7, 0.5); A.flash(fCV, t + 11.1, 0.6);
-  A.fadeIn(certB, t + 11.6, 0.5, {s0: 0.3}); burst(certBurst, t + 11.7); A.pulse(certB, t + 12.2, 0.6, 1.12);
+  A.fadeIn(certB, t + 11.6, 0.5, {s0: 0.3}); A.fadeIn(certBurst, t + 11.7, 0.2, {s0: 0.8}); A.to(certBurst, t + 11.9, 0.7, {s: 1.2}); A.fadeOut(certBurst, t + 12.15, 0.45); A.pulse(certB, t + 12.2, 0.6, 1.12);
   A.fadeIn(contTxt, t + 12.8, 0.5, {dy: 6});
   A.draw(aCO, t + 13.8, 0.5); A.draw(out, t + 14.0, 0.9); A.write(outT, t + 14.4, 0.6); A.draw(outDiv, t + 14.5, 0.4);
   A.fadeIn(out0, t + 15.0, 0.5);
@@ -981,7 +1048,7 @@ beat(6, 23, (t) => {
   A.draw(onlyH, t + 20.2, 0.8); A.fadeIn(onlyHL, t + 20.8, 0.5);
 });
 
-/* 10. Approve: the pool contract pins three hashes, its identity (its card keeps this place from now on) */
+/* 11. Approve: the pool contract pins three hashes, its identity (its card keeps this place from now on) */
 const CK = {x: 2460, y: 50, w: 700, h: 800};
 const ck = Card(CK.x, CK.y, CK.w, CK.h, C.teal, {fo: 0.05});
 const KW = (lx, ly) => [CK.x + lx, CK.y + ly]; // world position of a point on the contract card
@@ -1005,12 +1072,12 @@ const ckNone = CT(ck, 28, 400, 'none yet', {size: 24, fill: C.dim});
 const AY = [398, 444];
 const apP = MC(ck, 104, AY[0], 'program <m>P</m>', C.teal, {w: 160, size: 22});
 const apPk = Check(...at(ck, 210, AY[0]), C.green, {parent: ck, k: 0.9});
-const apP2 = MC(ck, 104, AY[1], 'program <m>P</m>2', C.teal, {w: 160, size: 22});
+const apP2 = MC(ck, 104, AY[1], 'program <m>P</m> 2', C.teal, {w: 160, size: 22});
 const apP2k = Check(...at(ck, 210, AY[1]), C.green, {parent: ck, k: 0.9});
 const ckDiv3 = CLine(ck, 20, 476, 680, 476, C.rule);
-const lineUp = PINS.map(([, h, c]) => Chip(1740, 690, h, c, {w: 190, size: 21}));
+const lineUp = PINS.map(([, h, c], i) => Chip(1740, 538 + 46 * i, h, c, {w: 190, size: 21}));
 const lineUpL = Txt(2330, 166, 'in the certificate', {size: 20, fill: C.gold, anchor: 'middle'});
-beat(10, 18, (t) => {
+beat(11, 18, (t) => {
   A.cam(t, 2.4, {cx: 2400, cy: 450});
   A.fadeOut([chkC, aCV, lvLbl2, contTxt, aCO, out, LP, offTxt, onlyH, onlyHL], t, 0.6);
   A.to(certB, t + 0.2, 2.4, {x: 1740, y: 690, s: 0.8});
@@ -1020,15 +1087,15 @@ beat(10, 18, (t) => {
   A.fadeIn(certLbl0, t + 3.0, 0.5, {dx: -8});
   pinFly.forEach((m, i) => {
     const tt = t + 5.4 + i * 1.3, [x, y] = KW(560, PY[i]);
-    A.fadeIn(m, tt, 0.4, {s0: 0.6}); A.to(m, tt + 0.4, 1.0, {x, y}); A.handoff(m, pinC[i], tt + 1.4, 0.15);
+    A.fadeIn(m, tt, 0.4, {s0: 0.6}); A.to(m, tt + 0.4, 1.0, {x, y}); A.handoff(m, pinC[i], tt + 1.41, 0.02); // identical chips: an instant swap
     A.fadeIn(pinL[i], tt + 1.2, 0.5, {dx: -8});
   });
   A.fadeIn(pinSub, t + 9.6, 0.5, {dx: -8});
-  A.handoff(ckPinsL, ckIdL, t + 10.0, 0.5); A.pulse(pinC, t + 10.4, 0.7, 1.1);
+  A.fadeOut(ckPinsL, t + 10.0, 0.3); A.fadeIn(ckIdL, t + 10.35, 0.4); A.pulse(pinC, t + 10.4, 0.7, 1.1);
   A.draw(ckDiv2, t + 10.8, 0.5); A.fadeIn(ckApL, t + 11.1, 0.5); A.fadeIn(ckNone, t + 11.6, 0.5);
   lineUp.forEach((m, i) => {
     const tt = t + 12.8 + i * 0.3, y = KW(0, PY[i])[1];
-    A.fadeIn(m, tt, 0.3, {s0: 0.5}); A.to(m, tt, 1.1, {x: 2330, y});
+    A.fadeIn(m, tt, 0.3, {dy: 20}); A.to(m, tt + 0.3, 1.1, {x: 2330, y});
     circumC(2330, y, 190, 35, PINS[i][2], tt + 1.3, {hold: 1.2}); circumC(...KW(560, PY[i]), 190, 35, PINS[i][2], tt + 1.3, {hold: 1.2});
     A.pulse([m, pinC[i]], tt + 1.4, 0.6, 1.12);
     A.fadeOut(m, t + 16.6, 0.5);
@@ -1036,7 +1103,7 @@ beat(10, 18, (t) => {
   A.fadeIn(lineUpL, t + 13.4, 0.5); A.fadeOut(lineUpL, t + 16.6, 0.5);
 });
 
-/* 11. Approve: the approval transaction */
+/* 12. Approve: the approval transaction */
 const AT = {x: 1640, y: 60, w: 760, h: 540};
 const atx = Card(AT.x, AT.y, AT.w, AT.h, C.ink, {fo: 0.03});
 const AW = (lx, ly) => [AT.x + lx, AT.y + ly];
@@ -1055,7 +1122,7 @@ const afL2 = ['approves the sender as payer', 'proof: the certificate, beside th
 const certLink = Line(1740, 666, 1740, 604, C.gold, {dash: '6 6', sw: 2});
 const certLbl = Txt(1838, 698, 'the certificate travels beside it', {size: 22, fill: C.dim});
 const depDef = [Txt(1660, 778, '<k=gold>a dependency</k>: a claim the block must prove,', {size: 24}), Txt(1660, 812, '“this program ran and output this hash”', {size: 24, fill: C.dim})];
-beat(10, 18, (t) => {
+beat(11, 18, (t) => {
   A.draw(atx, t + 0.4, 1.0); A.write(atxT, t + 0.8, 0.8); A.fadeIn(atxTag, t + 1.1, 0.5); A.draw(atxDiv1, t + 1.0, 0.5);
   A.fadeIn(atxSend, t + 1.5, 0.5, {dx: -8}); A.draw(atxDiv2, t + 1.7, 0.5);
   A.draw(afRows, t + 2.2, 0.7, {lag: 0.15}); A.fadeIn(afIdx, t + 2.4, 0.4, {lag: 0.15});
@@ -1067,11 +1134,11 @@ beat(10, 18, (t) => {
   A.fadeIn(afEip, t + 6.8, 0.5);
   circum(...AW(14, AFY[1] - 4), 732, AFH + 8, C.gold, t + 7.2, {hold: 2.4});
   A.fadeIn(depDef, t + 7.4, 0.5, {lag: 0.6, dy: 8});
-  A.draw(certLink, t + 10.0, 0.5); A.handoff(certLbl0, certLbl, t + 10.2, 0.5); A.pulse(certB, t + 10.4, 0.7, 1.2);
+  A.draw(certLink, t + 10.0, 0.5); A.fadeOut(certLbl0, t + 10.2, 0.3); A.fadeIn(certLbl, t + 10.55, 0.4); A.pulse(certB, t + 10.4, 0.7, 1.2);
   A.pulse(afL2[2], t + 12.4, 0.6, 1.06);
 });
 
-/* 12. Approve: the contract never verifies a proof; what approve checks, then P joins the approved list */
+/* 13. Approve: the contract never verifies a proof; what approve checks, then P joins the approved list */
 const nvH = Txt(1650, 804, 'the contract never verifies a proof', {size: 36});
 const aBP = Line(1826, 690, 2080, 690, C.gold, {sw: 2.6, dash: '3 8'});
 const aBPdots = Arrow(2074, 690, 2090, 690, C.gold, {sw: 2.2, head: 11});
@@ -1087,7 +1154,7 @@ const apG = CT(ck, 82, 597, 'same bytes in calldata  ·  unproven', {size: 20, f
 const apRec = CT(ck, 28, 730, '<m>P</m>  joins the list, recorded with <c>export_hash</c> and the block', {size: 22, fill: C.green});
 const fDep = Flash(`M${AW(742, AFY[1] + 56).join(',')} Q2440,${CK.y + 530} ${KW(20, 512).join(',')}`, C.gold, {sw: 6, len: 0.3});
 const pFly = MChip(...AW(620, AFY[2] + 56), 'program <m>P</m>', C.teal, {w: 160, size: 22});
-beat(10, 21, (t) => {
+beat(11, 21, (t) => {
   A.fadeOut([depDef, certLbl], t, 0.5);
   A.write(nvH, t + 0.6, 1.0); A.pulse(nvH, t + 1.8, 0.6, 1.05);
   A.fadeIn(aBP, t + 2.6, 0.6, {dx: -20}); A.draw(aBPdots, t + 3.0, 0.3); A.fadeIn(bpBox, t + 3.2, 0.5, {s0: 0.8}); A.fadeIn(bpLbl, t + 3.6, 0.5, {dy: 6});
@@ -1113,18 +1180,19 @@ function Marker(label, col, w) {
 const mkSame = Marker('same as an ordinary program-proof payment', C.grey, 428);
 const mkNew = Marker('new: one lookup in the approved list', C.orange, 368);
 
-/* 13. Pay: back to Alice; an ordinary program proof */
-const aWP2 = Arrow(468, 340, 640, 340, C.red), fWP2 = Flash(aWP2.pathD, C.red);
-const aPV2 = Arrow(956, 340, 1170, 340, C.gold), fPV2 = Flash(aPV2.pathD, C.gold);
-const lvLbl3 = Txt(1063, 320, 'leanVM', {size: 24, fill: C.gold, anchor: 'middle'});
+/* 14. Pay: back to Alice; an ordinary program proof */
+const aWP2 = Arrow(468, 340, 647, 340, C.red), fWP2 = Flash(aWP2.pathD, C.red);
+const aPV2 = Arrow(956, 340, 1222, 340, C.gold), fPV2 = Flash(aPV2.pathD, C.gold);
+const lvLbl3 = Txt(1089, 320, 'leanVM', {size: 24, fill: C.gold, anchor: 'middle'});
 const proofA = Badge(1290, 340, {k: 1.25});
 const proofT = Txt(1210, 456, 'about 0.15 s in a development test, without zero knowledge', {size: 22, fill: C.dim, anchor: 'middle'});
 const nl13 = NoLean(800, 524);
-beat(13, 14, (t) => {
+beat(14, 14, (t) => {
   A.cam(t, 2.4, {cx: 800, cy: 450});
   A.fadeOut([atx, certB, certLink, nvH, aBP, aBPdots, bpBox, bpLbl, apH, apL, apK, apG, apGx, apRec, ckDiv3], t, 0.6);
   A.fadeIn(mkSame, t + 1.0, 0.5);
   A.to(witC, t + 0.1, 0.01, {x: 290, y: 340}, {e: lin}); A.to(prog, t + 0.1, 0.01, {x: 800, y: 340}, {e: lin});
+  A.to(device, t + 0.1, 0.01, {y: 348}, {e: lin}); A.to(intent, t + 0.1, 0.01, {y: 132}, {e: lin}); // clear of the marker pill
   A.fadeIn(device, t + 1.4, 0.7); A.fadeIn([devLbl, intent], t + 1.8, 0.5);
   appear(witC, t + 2.4);
   A.draw(aWP2, t + 3.2, 0.5); appear(prog, t + 3.6); A.flash(fWP2, t + 3.8, 0.6);
@@ -1134,7 +1202,7 @@ beat(13, 14, (t) => {
   A.fadeIn(nl13, t + 9.4, 0.5, {s0: 0.7}); A.pulse(nl13, t + 9.9, 0.6, 1.1);
 });
 
-/* 14. Pay: the payment's frame transaction, and the pool's VERIFY frame with its one new check */
+/* 15. Pay: the payment's frame transaction, and the pool's VERIFY frame with its one new check */
 const PT = {x: 1640, y: 60, w: 760, h: 620};
 const ptx = Card(PT.x, PT.y, PT.w, PT.h, C.ink, {fo: 0.03});
 const PW = (lx, ly) => [PT.x + lx, PT.y + ly];
@@ -1174,7 +1242,7 @@ const vAppS = CT(ck, 196, 734, 'the pool pays the fee', {size: 24});
 const vNever = CT(ck, 28, 774, 'it never verifies a proof itself', {size: 22, fill: C.dim});
 const aF1 = Arrow(...PW(746, PFY[1] + 48), ...KW(14, 512), C.green, {bend: -30, sw: 2.5, head: 11});
 const fLook = Flash(`M${PW(742, PFY[2] + 40).join(',')} Q2470,${CK.y + 470} ${KW(30, AY[0]).join(',')}`, C.orange, {sw: 6, len: 0.3});
-beat(13, 26, (t) => {
+beat(14, 26, (t) => {
   A.cam(t, 2.4, {cx: 2400, cy: 450});
   A.fadeOut([device, devLbl, intent, witC, prog, aWP2, aPV2, lvLbl3, proofT, nl13], t, 0.6);
   A.to(proofA, t + 0.2, 2.4, {x: 1740, y: 740, s: 0.8});
@@ -1187,8 +1255,8 @@ beat(13, 26, (t) => {
     A.fadeIn(pfL2[i], tt + 0.6, 0.5, {dx: -8});
   });
   A.fadeIn(pfTag[0], t + 4.2, 0.5); A.fadeIn(pfTag[1], t + 6.6, 0.5);
-  circum(...PW(14, 92), 732, 36, C.teal, t + 8.8, {hold: 1.4}); A.fadeIn(pSendV, t + 9.1, 0.5);
-  circum(...PW(14, 134), 732, 36, C.blue, t + 10.2, {hold: 1.6}); A.fadeIn(pNonceV, t + 10.5, 0.5); A.fadeIn([pNonceA, pNonceTag], t + 11.0, 0.5, {dx: -8});
+  circum(...PW(14, 86), 732, 36, C.teal, t + 8.8, {hold: 1.4}); A.fadeIn(pSendV, t + 9.1, 0.5);
+  circum(...PW(14, 128), 732, 36, C.blue, t + 10.2, {hold: 1.6}); A.fadeIn(pNonceV, t + 10.5, 0.5); A.fadeIn([pNonceA, pNonceTag], t + 11.0, 0.5, {dx: -8});
   A.to(pfDim, t + 12.2, 0.6, {o: 0.3});
   circum(...PW(14, PFY[2] - 4), 732, PFH + 8, C.gold, t + 12.6, {hold: 2.0}); A.pulse(pfL1[2], t + 13.0, 0.6, 1.05);
   A.fadeIn(wrapR, t + 13.8, 0.6); A.fadeIn(wrapL, t + 14.1, 0.5, {dx: -8});
@@ -1204,7 +1272,7 @@ beat(13, 26, (t) => {
   A.fadeIn(vNever, t + 24.2, 0.6, {dy: 6}); A.fadeIn(nl14, t + 24.6, 0.5, {s0: 0.7});
 });
 
-/* 15. Mempool: what a node checks, then every second the proofs are merged (as in PCS_open) */
+/* 16. Mempool: what a node checks, then every second the proofs are merged (as in PCS_open) */
 const NP_ = {A: [3435, 470], B: [3715, 240], C: [3715, 700], D: [4005, 460], E: [4285, 230], F: [4285, 700], G: [4565, 460]};
 const N = {};
 for (const k in NP_) N[k] = Node(NP_[k][0], NP_[k][1], {col: C.grey});
@@ -1219,22 +1287,26 @@ const npB = Badge(...at(nPanel, 560, 250), {parent: nPanel});
 const npS = CT(nPanel, 64, 300, 'checked outside the EVM, as EIP-8288 specifies', {size: 22, fill: C.dim});
 const npAcc = CT(nPanel, 30, 376, 'accept, keep for merging', {size: 24, fill: C.green});
 const npLink = Line(3470, 470, 3636, 470, C.faint, {sw: 2, dash: '6 6'});
-const BAt = (k) => [NP_[k][0] + 56, NP_[k][1] - 52];
+/* Each node's proof badge sits where no edge of the graph passes. */
+const BOFF = {A: [-90, 0], B: [-90, 0], C: [-90, 0], D: [0, -82], E: [90, 0], F: [90, 0], G: [0, -82]};
+const BAt = (k) => [NP_[k][0] + BOFF[k][0], NP_[k][1] + BOFF[k][1]];
 const nodeB = {};
 for (const k in NP_) nodeB[k] = Badge(...BAt(k));
 const nodePs = Object.keys(NP_).flatMap((k) => [[-52, -30], [-56, 32], [6, 56]].map(([dx, dy]) => { const m = MiniProof(NP_[k][0] + dx, NP_[k][1] + dy); m.k = k; return m; }));
 const every = Txt(4000, 140, 'every second, each node merges the proofs it holds into one and forwards it', {size: 24, fill: C.dim, anchor: 'middle'});
 const nl15 = NoLean(4000, 806);
 const dimmedM = [N.B, N.C, N.D, N.E, N.F, N.G, ...EDGES, mpLbl];
-beat(15, 22, (t) => {
+beat(16, 22, (t) => {
   A.cam(t, 2.4, {cx: 4000, cy: 450});
+  /* The legend steps aside while the contract card slides past beneath it. */
+  A.fadeOut(LEG, t, 0.3); A.fadeIn(LEG, t + 2.4, 0.4);
   A.fadeOut(mkNew, t, 0.3); A.fadeIn(mkSame, t + 0.3, 0.4);
   A.fadeOut([ptx, wrapL, nl14, vH, vAs, vChk, vChkM, vBar, vNew, vNewK, vNewTag, vNewS, vApp, vAppK, vAppS, vNever, aF1, ckDiv3], t, 0.6);
   A.to([wrapR, proofA], t + 0.2, 2.4, {x: 3260, y: 470});
   A.draw(EDGES, t + 1.2, 0.8, {lag: 0.04}); A.fadeIn(Object.values(N), t + 1.3, 0.6, {lag: 0.08, s0: 0.5}); A.fadeIn(mpLbl, t + 2.0, 0.6);
   A.to([wrapR, proofA], t + 2.8, 0.8, {x: 3435, y: 470, s: 0.4}); A.fadeOut([wrapR, proofA], t + 3.4, 0.3);
   A.pulse(N.A, t + 3.5, 0.6, 1.2);
-  A.to(dimmedM, t + 4.0, 1.0, {o: 0.2});
+  A.to(dimmedM, t + 4.0, 1.0, {o: 0.06});
   A.draw(npLink, t + 4.3, 0.5); A.draw(nPanel, t + 4.5, 0.8); A.fadeIn(npT, t + 4.9, 0.4);
   npR.forEach((m, i) => { const tt = t + 5.6 + i * 1.6; A.fadeIn(m, tt, 0.5, {dx: -8}); A.draw(npK[i], tt + 0.7, 0.4); });
   A.fadeIn(npB, t + 8.6, 0.4, {s0: 0.5}); A.fadeIn(npS, t + 9.2, 0.5);
@@ -1244,12 +1316,12 @@ beat(15, 22, (t) => {
   A.fadeIn(every, t + 13.6, 0.5);
   nodePs.forEach((m) => { const [bx, by] = BAt(m.k); A.to(m, t + 14.6, 0.9, {x: bx, y: by, s: 0.6}); A.fadeOut(m, t + 15.3, 0.25); });
   A.fadeIn(Object.values(nodeB), t + 15.4, 0.4, {s0: 0.3}); A.pulse(Object.values(nodeB), t + 15.8, 0.6, 1.2);
-  [['A', 'B'], ['A', 'C'], ['A', 'D']].forEach(([a, b], i) => travelB(BAt(a), BAt(b), t + 16.6 + i * 0.2, 1.3, nodeB[b]));
-  [['D', 'E'], ['D', 'F'], ['D', 'G']].forEach(([a, b], i) => travelB(BAt(a), BAt(b), t + 17.8 + i * 0.2, 1.3, nodeB[b]));
+  [['A', 'B'], ['A', 'C'], ['A', 'D']].forEach(([a, b], i) => travelB(NP_[a], NP_[b], t + 16.6 + i * 0.2, 1.3, nodeB[b], nodeB.A));
+  [['D', 'E'], ['D', 'F'], ['D', 'G']].forEach(([a, b], i) => travelB(NP_[a], NP_[b], t + 17.8 + i * 0.2, 1.3, nodeB[b], nodeB.A));
   A.fadeIn(nl15, t + 19.6, 0.5, {s0: 0.7});
 });
 
-/* 16. Block: one block proof in the header; validators; the pool settles (as in PCS_open) */
+/* 17. Block: one block proof in the header; validators; the pool settles (as in PCS_open) */
 const bNode = Node(4950, 460, {r: 36, col: C.ink, label: 'builder'});
 const gEdge = Edge(N.G, bNode);
 const finalB = Badge(4950, 330, {k: 1.1, label: 'block proof'});
@@ -1289,12 +1361,12 @@ const psUsed = [140, 190].map((y) => CT(pst, 470, y, 'used', {size: 22, fill: C.
 const exArrow = Arrow(rowW(1)[0] + 6, rowW(1)[1], PS.x - 6, PS.y + 150, C.blue, {bend: -30});
 const nl16 = NoLean(5840, 794);
 const nl16s = Txt(5974, 802, 'in the mempool or the block', {size: 24, fill: C.dim});
-beat(16, 20, (t) => {
+beat(17, 20, (t) => {
   A.cam(t, 2.2, {cx: 5600, cy: 450});
   A.fadeOut([every, mpLbl, nl15], t, 0.6);
   A.draw(gEdge, t + 0.8, 0.8); A.fadeIn(bNode, t + 1.0, 0.7, {s0: 0.6});
-  travelB(BAt('G'), [4950, 460], t + 1.6, 1.1, bNode); travelB(BAt('F'), [4950, 460], t + 2.0, 1.1, bNode);
-  A.fadeOut(Object.values(nodeB), t + 2.6, 0.6);
+  travelB(NP_.G, [4950, 460], t + 1.6, 1.1, bNode, nodeB.A); travelB(NP_.F, [4950, 460], t + 2.0, 1.1, bNode, nodeB.A);
+  A.fadeOut(Object.values(nodeB), t + 2.6, 0.6); A.fadeOut(gEdge, t + 3.2, 0.5); // the edge would dangle off the left edge once the camera arrives
   A.fadeIn(finalB, t + 3.2, 0.6, {s0: 0.3}); A.pulse(finalB, t + 3.8, 0.6, 1.15);
   A.draw(blk, t + 3.0, 1.2); A.fadeIn(blkT, t + 3.5, 0.5);
   A.draw([hdr, bdy], t + 3.3, 1.0, {lag: 0.2}); A.fadeIn([hdrT, bdyT], t + 3.8, 0.5);
@@ -1315,23 +1387,23 @@ beat(16, 20, (t) => {
   A.fadeIn(nl16, t + 16.2, 0.5, {s0: 0.7}); A.fadeIn(nl16s, t + 16.6, 0.5, {dx: -8});
 });
 
-/* 17. Upgrade: the payoff. A faster program P2 bounces off a code-pinned pool and is approved by the rules-pinned one */
+/* 18. Upgrade: the payoff. A faster program P2 bounces off a code-pinned pool and is approved by the rules-pinned one */
 const upT = Txt(2020, 96, 'months later: a faster program', {size: 28, anchor: 'middle'});
 const rpLbl = Txt(2462, 36, 'rules-pinned pool', {size: 22, fill: C.green});
 const cpC = Card(1640, 140, 260, 110, C.teal, {fo: 0.04});
 cpC.parts = [CT(cpC, 18, 38, 'pool contract', {size: 24, fill: C.teal}), Lock(...at(cpC, 232, 30), C.teal, {parent: cpC, k: 0.8}), MC(cpC, 130, 78, '<c>image_id</c> · <m>P</m>', C.teal, {w: 210, size: 22})];
 const cpLbl = Txt(1770, 286, 'code-pinned pool', {size: 22, fill: C.red, anchor: 'middle'});
-const prog2 = Mini(2200, 195, C.teal, 'program <m>P</m>2', 'faster', null, {w: 280, h: 110});
-const p2Fly = MChip(2110, 195, 'program <m>P</m>2', C.teal, {w: 150, size: 22});
+const prog2 = Mini(2200, 195, C.teal, 'program <m>P</m> 2', 'faster', null, {w: 280, h: 110});
+const p2B = Arrow(2054, 195, 1944, 195, C.teal, {sw: 2.5, head: 12});
 const cpX = Cross(1922, 195, C.red, {k: 1.1});
 const LP2 = Pile(2200, 336, 3, {w: 50, h: 62, col: C.purple, lines: 3});
 const LP2L = Txt(2160, 344, 'Lean proof', {size: 22, fill: C.purple, anchor: 'end'});
-const LP2s = Txt(2244, 344, 'same rules', {size: 22, fill: C.blue});
+const LP2s = Txt(2256, 344, 'same rules', {size: 22, fill: C.blue});
 const chkChip = MChip(2200, 420, 'Lean checker', C.purple, {w: 180, size: 22});
 const cert2 = Badge(2200, 488, {label: 'certificate'});
 const appr2 = MChip(2200, 556, 'approval', C.ink, {w: 140, size: 22});
 const a17 = [[254, 280, C.teal], [374, 400, C.purple], [440, 466, C.gold], [508, 536, C.gold]].map(([y1, y2, c]) => Arrow(2200, y1, 2200, y2, c, {sw: 2.5, head: 10}));
-const aTo = Arrow(2272, 556, ...KW(14, AY[1] + 6), C.teal, {bend: 30, sw: 2.5, head: 11});
+const aTo = Arrow(2272, 556, ...KW(22, AY[1]), C.teal, {bend: 30, sw: 2.5, head: 11});
 const pinsSame = CT(ck, 28, 522, 'the pins stay the same', {size: 24, fill: C.green});
 const pinsSameK = Check(...at(ck, 320, 514), C.green, {parent: ck, k: 0.9});
 const anonN = CT(ck, 28, 566, 'each extra program splits the anonymity set: keep few', {size: 20, fill: C.dim});
@@ -1339,17 +1411,17 @@ const wal = new M(2020, 652, null, 0); shape(wal, rr(-380, -44, 760, 88, 16), {s
 const walL = Txt(1662, 640, 'Alice’s wallet', {size: 20, fill: C.dim});
 const walS = Txt(1662, 678, 'now proves her payments with', {size: 24});
 const walP = MChip(2150, 670, 'program <m>P</m>', C.teal, {w: 160, size: 22});
-const walP2 = MChip(2150, 670, 'program <m>P</m>2', C.teal, {w: 160, size: 22});
+const walP2 = MChip(2150, 670, 'program <m>P</m> 2', C.teal, {w: 160, size: 22});
 const fkC = Card(1640, 712, 760, 100, C.gold, {fo: 0.05});
 const fkIc = IconFork(...at(fkC, 50, 50), C.purple, 0.8); fkC.inner.appendChild(fkIc.g);
 fkC.parts = [fkIc, CT(fkC, 100, 42, 'a fork swaps leanVM’s proof system', {size: 24}), CT(fkC, 100, 78, 'approvals are stored results, nothing re-proven', {size: 22, fill: C.green})];
-beat(17, 24, (t) => {
+beat(18, 24, (t) => {
   cutTo(t, 2400); A.fadeOut(mkSame, t, 0.4);
   A.fadeOut([blk, hdr, bdy, bNode, gEdge, vals, valsL, vlChk, vlChkM, pst, nl16, nl16s, Object.values(N), EDGES], t + 0.6, 0.1);
   A.fadeIn(upT, t + 1.6, 0.6);
   reveal(prog2, t + 2.2);
   reveal(cpC, t + 3.4); A.fadeIn(cpLbl, t + 3.9, 0.5);
-  A.fadeIn(p2Fly, t + 4.6, 0.4); A.to(p2Fly, t + 4.6, 0.7, {x: 2018}); A.to(p2Fly, t + 5.3, 0.6, {x: 2110}); A.fadeOut(p2Fly, t + 5.7, 0.3);
+  A.draw(p2B, t + 4.6, 0.6);
   A.draw(cpX, t + 5.2, 0.3); A.pulse(cpX, t + 5.5, 0.5, 1.4);
   A.fadeIn(rpLbl, t + 6.6, 0.5);
   A.draw(a17[0], t + 7.0, 0.4); A.fadeIn(LP2, t + 7.3, 0.5, {s0: 0.6}); A.fadeIn([LP2L, LP2s], t + 7.6, 0.5, {lag: 0.3});
@@ -1364,7 +1436,7 @@ beat(17, 24, (t) => {
   A.fadeIn(anonN, t + 21.4, 0.6, {dy: 6});
 });
 
-/* 18. Upgrade: who may approve */
+/* 19. Upgrade: who may approve */
 const whoT = Txt(7200, 120, 'who may approve a program: the pool’s choice', {size: 34, anchor: 'middle'});
 const WHO = [['fixed', Lock, C.ink, 'a list approved during setup', 'then approve is switched off', ''],
   ['governed', IconShield, C.blueL, 'a governance key', 'approves and removes programs;', 'changing a pin clears approvals'],
@@ -1380,16 +1452,16 @@ const who = WHO.map(([name, Ic, col, a, b, c], i) => {
 const openRed = Txt(7720, 572, 'exposed to its checker’s bugs', {size: 26, fill: C.red, anchor: 'middle'});
 const openLine = Line(7500, 536, 7940, 536, C.red, {sw: 3});
 const advice = Txt(7200, 720, 'an immutable open pool: two independent checkers, or a proposed fork-maintained checker list', {size: 28, anchor: 'middle'});
-beat(17, 18, (t) => {
+beat(18, 18, (t) => {
   cutTo(t, 7200);
-  A.fadeOut([ck, upT, rpLbl, cpC, cpLbl, cpX, prog2, LP2, LP2L, LP2s, chkChip, cert2, appr2, a17, aTo, wal, walL, walS, walP2, fkC], t + 0.6, 0.1);
+  A.fadeOut([ck, upT, rpLbl, cpC, cpLbl, cpX, p2B, prog2, LP2, LP2L, LP2s, chkChip, cert2, appr2, a17, aTo, wal, walL, walS, walP2, fkC], t + 0.6, 0.1);
   A.fadeIn(whoT, t + 1.4, 0.6);
   who.forEach((m, i) => reveal(m, t + 2.4 + 2.6 * i));
   A.draw(openLine, t + 10.6, 0.5); A.fadeIn(openRed, t + 10.9, 0.5, {dy: 6});
   A.fadeIn(advice, t + 13.0, 0.6, {dy: 8});
 });
 
-/* 19. Upgrade: what can go wrong, each failure shown with the piece it hits */
+/* 20. Upgrade: what can go wrong, each failure shown with the piece it hits */
 const wrT = Txt(8800, 100, 'what can go wrong, and who is affected', {size: 34, anchor: 'middle'});
 const wrH = [Txt(8180, 162, 'failure', {size: 22, fill: C.dim}), Txt(8660, 162, 'who is affected', {size: 22, fill: C.dim})];
 const WRY = [176, 272, 368, 464, 560];
@@ -1411,7 +1483,7 @@ const wr = WR.map(([a, b], i) => {
 const risk = Card(8080, 594, 1440, 196, C.orange, {fo: 0.06});
 risk.parts = [CT(risk, 32, 50, 'biggest open risk', {size: 30, fill: C.orange}), CT(risk, 32, 104, 'Lean proofs about real compiled code may be too large to check', {size: 28}),
   CT(risk, 32, 154, '8.3 GB: sig.golf’s proofs about small RISC-V images plus security bounds', {size: 22, fill: C.dim})];
-beat(17, 23, (t) => {
+beat(18, 23, (t) => {
   A.cam(t, 2.4, {cx: 8800, cy: 450});
   A.fadeOut([whoT, who, openRed, openLine, advice], t + 2.4, 0.2);
   A.fadeIn(wrT, t + 1.6, 0.6);
@@ -1425,7 +1497,7 @@ beat(17, 23, (t) => {
   reveal(risk, t + 15.4);
 });
 
-/* 20. Upgrade: what Ethereum enshrines, what each contract chooses, what wallets check */
+/* 21. Upgrade: what Ethereum enshrines, what each contract chooses, what wallets check */
 const fixC = Card(9640, 150, 640, 330, C.ink, {fo: 0.04});
 fixC.parts = [CT(fixC, 32, 62, 'enshrined by Ethereum', {size: 34}), Lock(...at(fixC, 590, 50), C.ink, {parent: fixC}), CLine(fixC, 20, 92, 620, 92, C.rule),
   Dot(...at(fixC, 46, 152), C.ink, {r: 5, parent: fixC}), CT(fixC, 70, 160, 'no language but its machine', {size: 28}), CT(fixC, 70, 200, '(RISC-V, <c>ERV64_V1</c>)', {size: 24, fill: C.dim}),
@@ -1438,7 +1510,7 @@ const walC = Card(9640, 530, 1520, 150, C.green, {fo: 0.04});
 walC.parts = [CT(walC, 32, 56, 'checked by wallets', {size: 32, fill: C.green}), CT(walC, 32, 110, 'read the pins, check the rules against <c>spec_id</c> and the contract against a template, show the rules', {size: 24})];
 const ctFoot = Txt(10400, 766, 'certificate transparency for on-chain code', {size: 36, anchor: 'middle'});
 const ctSub = Txt(10400, 812, 'a public record of which programs were checked against which rules', {size: 22, fill: C.dim, anchor: 'middle'});
-beat(17, 17, (t) => {
+beat(18, 17, (t) => {
   A.cam(t, 2.4, {cx: 10400, cy: 450});
   A.fadeOut([wrT, wrH, wrDiv, wr, thumbs, risk], t + 2.4, 0.2);
   reveal(fixC, t + 1.6);
@@ -1447,7 +1519,7 @@ beat(17, 17, (t) => {
   A.fadeIn(ctFoot, t + 12.0, 0.7, {dy: 8}); A.fadeIn(ctSub, t + 12.8, 0.6, {dy: 6});
 });
 
-/* 21. Recap: where each artifact goes (as PCS_open's swimlane), with what is still open */
+/* 22. Recap: where each artifact goes (as PCS_open's swimlane), with what is still open */
 const RL = 11240, RX = [11520, 11730, 11940, 12150, 12360, 12570], RY = [194, 302, 410, 518, 626];
 const colHdr = ['developer', 'checker', 'contract', 'wallet', 'mempool', 'block'].map((s, i) => Txt(RX[i], 90, s, {size: 24, fill: C.dim, anchor: 'middle'}));
 const guides = RX.map((x) => Curve(`M${x},120 L${x},666`, C.rule, {sw: 2}));
@@ -1469,7 +1541,7 @@ const rr4 = {seg: rseg(RX[3], RX[5] - 64, RY[4], C.gold), dots: [rdot(RX[3], RY[
   ann: ann(RX[4], RY[4] + 46, 'merged every second, then into the block’s one proof')};
 const openCard = Card(11260, 724, 1480, 72, C.grey, {fo: 0.05, sw: 2});
 openCard.parts = [CT(openCard, 24, 45, '<k=dim>still open:</k>  Lean proof size  ·  the checker as a provable program  ·  a Lean model of the machine  ·  the scheme in the block statement', {size: 22})];
-beat(21, 21, (t) => {
+beat(22, 21, (t) => {
   cutTo(t, 12000); A.fadeOut(LEG, t + 0.6, 0.1);
   A.fadeOut([fixC, choC, walC, ctFoot, ctSub], t + 0.6, 0.1);
   A.fadeIn(colHdr, t + 1.1, 0.6, {lag: 0.12}); A.draw(guides, t + 1.3, 0.8, {lag: 0.08});
@@ -1482,16 +1554,16 @@ beat(21, 21, (t) => {
   A.fadeIn([openCard, ...openCard.parts], t + 15.4, 0.6);
 });
 
-/* 22. Close: the final mental model in three layers */
+/* 23. Close: the final mental model in three layers */
 const LX = 12880, LW = 1440, PXs = [13560, 14000];
 const bandR = Card(LX, 50, LW, 150, C.blue, {fo: 0.06});
 bandR.parts = [CT(bandR, 32, 88, 'rules  ·  what users rely on', {size: 32, fill: C.blue}), CChip(bandR, 1080, 75, 'spec_id', C.blue, {w: 190, size: 22}), Lock(...at(bandR, 1214, 72), C.blue, {parent: bandR, k: 1.1})];
 const bandP = Card(LX, 340, LW, 180, C.teal, {fo: 0.05});
 bandP.parts = [CT(bandP, 32, 100, 'programs  ·  come and go', {size: 26, fill: C.teal})];
-const pCards = PXs.map((x, i) => Mini(x, 430, C.teal, i ? 'program <m>P</m>2' : 'program <m>P</m>', 'RISC-V code', null, {w: 240, h: 110}));
+const pCards = PXs.map((x, i) => Mini(x, 430, C.teal, i ? 'program <m>P</m> 2' : 'program <m>P</m>', 'RISC-V code', null, {w: 240, h: 110}));
 const bandM = Card(LX, 640, LW, 150, C.grey, {fo: 0.05});
 bandM.parts = [CT(bandM, 32, 88, 'Ethereum’s machine  ·  the only language enshrined', {size: 30})];
-const upLinks = PXs.map((x) => [Line(x, 200, x, 226, C.purple, {sw: 2.5}), Line(x, 300, x, 372, C.gold, {sw: 2.5})]);
+const upLinks = PXs.map((x) => [Line(x, 200, x, 243, C.purple, {sw: 2.5}), Line(x, 281, x, 372, C.gold, {sw: 2.5})]); // under the piles and certificates, touching the certificates
 const mPiles = PXs.map((x) => Pile(x, 266, 3, {w: 46, h: 58, col: C.purple, lines: 3}));
 const mCerts = PXs.map((x) => Badge(x, 262, {label: 'certificate'}));
 const onceL = Txt(PXs[1] + 100, 270, 'once per program', {size: 22, fill: C.gold});
@@ -1501,23 +1573,23 @@ const dnLinks = PXs.map((x) => Line(x, 486, x, 640, C.gold, {sw: 2.5}));
 const payB = PXs.map((x) => Badge(x, 584));
 const payL = Txt(PXs[1] + 80, 592, 'every payment', {size: 22, fill: C.gold});
 const payFl = PXs.map((x) => Flash(`M${x},640 L${x},486`, C.gold, {sw: 5, len: 0.3}));
-beat(21, 22, (t) => {
+beat(22, 22, (t) => {
   A.cam(t, 2.4, {cx: 13600, cy: 450});
   A.fadeOut([colHdr, guides, rowLbl, rr0.seg, rr0.dots, rr0.ann, rr1.seg, rr1.dots, rr1.ann, rr2.seg, rr2.dots, rr2.ann, rr3, rr4.seg, rr4.dots, rr4.end, rr4.ann, openCard], t + 2.4, 0.2);
   reveal(bandR, t + 1.8); A.pulse(bandR.parts[2], t + 3.2, 0.6, 1.3);
   reveal(bandP, t + 4.0); reveal(pCards[0], t + 4.6);
   reveal(bandM, t + 6.0);
   A.draw(upLinks[0][1], t + 7.4, 0.4); A.fadeIn(mPiles[0], t + 7.6, 0.5, {s0: 0.6}); A.draw(upLinks[0][0], t + 8.0, 0.4);
-  A.handoff(mPiles[0], mCerts[0], t + 8.8, 0.5); A.pulse(mCerts[0], t + 9.3, 0.5, 1.15);
+  A.fadeOut(mPiles[0], t + 8.8, 0.3); A.fadeIn(mCerts[0], t + 9.1, 0.3); A.pulse(mCerts[0], t + 9.3, 0.5, 1.15);
   A.fadeIn(pCards[1], t + 10.6, 0.6, {dx: 60}); A.fadeIn(pCards[1].parts, t + 10.9, 0.5);
   A.draw(upLinks[1][1], t + 11.6, 0.4); A.fadeIn(mPiles[1], t + 11.8, 0.5, {s0: 0.6}); A.draw(upLinks[1][0], t + 12.2, 0.4);
-  A.handoff(mPiles[1], mCerts[1], t + 13.0, 0.5); A.pulse(mCerts[1], t + 13.5, 0.5, 1.15); A.fadeIn(onceL, t + 13.8, 0.5, {dx: -8});
+  A.fadeOut(mPiles[1], t + 13.0, 0.3); A.fadeIn(mCerts[1], t + 13.3, 0.3); A.pulse(mCerts[1], t + 13.5, 0.5, 1.15); A.fadeIn(onceL, t + 13.8, 0.5, {dx: -8});
   A.draw(noLeanRule, t + 14.4, 0.8); A.fadeIn(noLeanL, t + 14.9, 0.5);
   A.draw(dnLinks, t + 16.0, 0.6, {lag: 0.2}); A.fadeIn(payB, t + 16.4, 0.4, {lag: 0.2, s0: 0.5}); A.fadeIn(payL, t + 16.8, 0.5, {dx: -8});
   [17.6, 18.8, 20.0].forEach((d) => { payFl.forEach((f, i) => A.flash(f, t + d + i * 0.25, 0.7)); A.pulse(payB, t + d + 0.3, 0.5, 1.15); });
 });
 
-const CHAPTERS = [['Problem', 1], ['Rules', 2], ['Certify', 6], ['Approve', 10], ['Pay', 13], ['Mempool', 15], ['Block', 16], ['Upgrade', 17], ['Recap', 21]];
+const CHAPTERS = [['Payment', 1], ['Problem', 4], ['Rules', 6], ['Certify', 7], ['Approve', 11], ['Pay', 14], ['Mempool', 16], ['Block', 17], ['Upgrade', 18], ['Recap', 22]];
 
 /* ---------------- rendering ---------------- */
 function render(t) {
