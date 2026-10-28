@@ -64,13 +64,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
 .note{font-size:16px;line-height:1.6;margin:10px 0 0}
 .keys{font:13px var(--ui);color:var(--dim);text-align:center;margin:0}
 .narrow{display:none}
-@media (max-width:700px) and (orientation:portrait){.narrow{display:block}}
+@media (max-width:700px) and (orientation:portrait){.narrow{display:block;font-size:15px;color:var(--ink)}}
+@media (hover:none){.keys:not(.narrow){display:none}}
 </style>
 </head>
 <body>
 <main class="wrap">
   <header class="top">
-    <h1>Lean Specifications as Application Identity</h1>
+    <h1>Pin the rules, not the code</h1>
     <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
   </header>
   <div class="stagebox">
@@ -83,7 +84,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
     </svg>
     <button class="bigplay" id="bigplay" type="button"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l14 8-14 8z" fill="currentColor"/></svg><span id="bigplaytxt">Play</span></button>
   </div>
-  <p class="keys narrow">On a phone the labels are small. Turn the phone sideways or pinch to zoom.</p>
+  <p class="keys narrow">On a phone held upright the labels are too small to read: turn it sideways.</p>
   <div class="controls">
     <button id="prev" type="button" aria-label="Previous step"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M19 5.5L9 12l10 6.5z" fill="currentColor"/></svg></button>
     <button id="play" type="button" aria-label="Play"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path id="playicon" d="M7 4l14 8-14 8z" fill="currentColor"/></svg></button>
@@ -642,7 +643,7 @@ const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, 
 const CK = {x: 980, y: 40, w: 580};
 const KX = (lx) => CK.x + lx, KY = (ly) => CK.y + ly;
 /* Its frame grows twice (a new section each time): three frames with the same top edge, cross-faded. */
-const ckF = [210, 340, 590].map((h) => Card(CK.x, CK.y, CK.w, h, C.teal, {fo: 0.05}));
+const ckF = [210, 340, 432].map((h) => Card(CK.x, CK.y, CK.w, h, C.teal, {fo: 0.05}));
 
 /* 0. Title */
 const title = Txt(800, 380, 'Pin the rules, not the code', {size: 64, anchor: 'middle'});
@@ -746,10 +747,10 @@ beat(3, 21, (t) => {
 
 /* 4. The idea: pin the rules. The pin changes; the rules, in Lean */
 const rules = Card(100, 140, 640, 320, C.blue);
-const rulesT = CT(rules, 32, 54, 'the rules, in Lean', {size: 32, fill: C.blue});
+const rulesT = CT(rules, 32, 54, 'the rules, written in Lean', {size: 32, fill: C.blue});
 const rulesDiv = CLine(rules, 20, 80, 620, 80, C.rule);
 const RL = ['notes are in the pool', 'the spender holds their key', 'each nullifier comes from its note', 'inputs = outputs + fee'];
-const rulesL = RL.map((s, i) => CT(rules, 40, 136 + 48 * i, `<c>${s}</c>`, {size: 26}));
+const rulesL = RL.map((s, i) => CT(rules, 40, 136 + 48 * i, s, {size: 28}));
 const rulesS = Txt(420, 512, 'much shorter than the code, never run', {size: 28, fill: C.dim, anchor: 'middle'});
 const aRP = Arrow(750, 240, 1002, 205, C.blue, {sw: 2.5, head: 12});
 const anyT = Tag(800, 650, 'any program works if a Lean proof shows it follows them', C.teal, {size: 28, tc: C.ink});
@@ -823,7 +824,7 @@ const offT = Txt(170, 702, 'stays off chain', {size: 24, fill: C.purple, anchor:
 const dim7 = [aLC, chk, aCC, lvL, onceT];
 beat(5, 18, (t) => {
   A.fadeOut(certS, t, 0.4); A.to([LP, ...dim7], t + 0.2, 0.6, {o: 0.3});
-  A.handoff(ckF[0], ckF[1], t + 0.8, 0.8); A.draw(ckDiv2, t + 1.4, 0.5); A.fadeIn(apL, t + 1.7, 0.5);
+  A.handoff(ckF[0], ckF[1], t + 0.8, 0.8); A.draw(ckDiv2, t + 8.2, 0.5); A.fadeIn(apL, t + 8.4, 0.5);
   A.draw(aCK, t + 3.0, 0.6); A.fadeIn(vL, t + 3.4, 0.5, {dx: 8});
   /* A copy of the certificate travels up the arrow and into the contract; the original stays where it was made. */
   A.fadeIn(certGo, t + 4.3, 0.2); A.to(certGo, t + 4.4, 1.0, {y: 400}); A.fadeOut(certGo, t + 5.1, 0.3);
@@ -841,10 +842,10 @@ wal.parts = [CT(wal, 150, 66, 'Alice’s wallet', {size: 28, fill: C.red, anchor
 const aWC = Arrow(370, 344, 1002, 344, C.gold, {sw: 2.5, head: 12}), fWC = Flash(aWC.pathD, C.gold);
 const pay = Badge(560, 344, {k: 1.1, label: 'proof: <m>P</m> accepted', w: 200});
 const noLean = Tag(560, 430, 'no Lean here', C.purple, {size: 26});
-const isT = Txt(1238, 452, 'is <m>P</m> approved?', {size: 28, anchor: 'middle'});
-const isK = Check(1366, 443, C.green, {k: 0.9});
-const isS = Txt(1270, 494, 'one lookup', {size: 24, fill: C.dim, anchor: 'middle'});
-const aBob = Arrow(1270, 512, 1270, 594, C.teal, {sw: 2.5, head: 12});
+const isT = Txt(KX(222), KY(313), 'is <m>P</m> approved?', {size: 24});
+const isK = Check(KX(410), KY(304), C.green, {k: 0.8});
+const isS = Txt(KX(440), KY(313), 'one lookup', {size: 22, fill: C.dim});
+const aBob = Arrow(1270, 392, 1270, 594, C.teal, {sw: 2.5, head: 12});
 const bob2 = Person(1270, 650, C.ink);
 const bobT = Txt(1270, 728, 'Bob gets a 1.2 ETH note', {size: 28, anchor: 'middle'});
 beat(8, 17, (t) => {
@@ -867,7 +868,7 @@ const a92L = Txt(614, 556, 'checker, leanVM', {size: 22, fill: C.gold, anchor: '
 const cert2 = Badge(718, 610, {k: 1.1, label: 'certificate'});
 const a93 = Arrow(820, 592, 1290, 388, C.gold, {sw: 2.5, head: 12, bend: 60});
 const aSw = Arrow(210, 404, 210, 544, C.red, {sw: 2.5, head: 12});
-const swT = Txt(230, 482, 'wallets switch', {size: 26});
+const swT = Txt(230, 482, 'her wallet switches', {size: 26});
 const sameT = Tag(KX(384), KY(160), 'unchanged', C.green, {size: 24});
 beat(9, 16, (t) => {
   leave([aWC, pay, noLean, isT, isK, isS, aBob, bob2, bobT], t);
@@ -880,22 +881,22 @@ beat(9, 16, (t) => {
 });
 
 /* 10. The fine print: the contract really pins three things, one reason each */
-const fpH = Txt(90, 330, 'the fine print', {size: 44});
-const fpS = Txt(90, 386, 'what the contract really pins', {size: 28, fill: C.dim});
-const DL = 246; // the approved list moves down to make room for two more pins
-const rsR = Txt(KX(30), KY(206), 'what a valid payment is', {size: 24});
-const pinM = MChip(KX(180), KY(258), 'machine description', C.pink, {w: 300, size: 24});
-const rsM = [Txt(KX(30), KY(304), 'Ethereum’s machine in Lean (not yet written),', {size: 24}), Txt(KX(30), KY(336), 'which defines what “<m>P</m> accepts” means', {size: 24})];
-const pinC = MChip(KX(115), KY(388), 'checker', C.purple, {w: 170, size: 24});
-const rsC = Txt(KX(30), KY(434), 'which program decides that a Lean proof is valid', {size: 24});
+const fpH = Txt(90, 150, 'the fine print', {size: 40});
+const fpS = Txt(90, 200, 'what the contract really pins', {size: 28, fill: C.dim});
+const DL = 92; // the approved list moves down to make room for two more pins
+const rsR = [Dot(108, 297, C.blue, {r: 9}), Txt(136, 306, '<k=blue>the rules</k>', {size: 30}), Txt(136, 348, 'what a valid payment is', {size: 26, fill: C.dim})];
+const pinM = MChip(KX(180), KY(216), 'machine description', C.pink, {w: 300, size: 24});
+const rsM = [Dot(108, 437, C.pink, {r: 9}), Txt(136, 446, '<k=pink>the machine description</k>', {size: 30}), Txt(136, 488, 'Ethereum’s machine in Lean (not yet written),', {size: 26, fill: C.dim}), Txt(136, 524, 'which defines what “<m>P</m> accepts” means', {size: 26, fill: C.dim})];
+const pinC = MChip(KX(115), KY(272), 'checker', C.purple, {w: 170, size: 24});
+const rsC = [Dot(108, 617, C.purple, {r: 9}), Txt(136, 626, '<k=purple>the checker</k>', {size: 30}), Txt(136, 668, 'which program decides that a Lean proof is valid', {size: 26, fill: C.dim})];
 beat(10, 19, (t) => {
   leave([wal, wal.parts, p2b, p2b.parts, a91, LP2, LP2L, a92, a92L, cert2, a93, aSw, swT, sameT], t);
   A.handoff(ckF[1], ckF[2], t + 0.4, 0.5);
   A.to(ckDiv2, t + 1.0, 0.9, {y: DL}); A.to(apL, t + 1.0, 0.9, {y: KY(260) + DL}); A.to([apP, apP2], t + 1.0, 0.9, {y: KY(304) + DL});
   A.fadeIn(fpH, t + 1.8, 0.6, {dx: -10}); A.fadeIn(fpS, t + 2.3, 0.6, {dx: -10});
-  A.fadeIn(rsR, t + 3.6, 0.5, {dx: -8}); A.pulse(pinR, t + 3.6, 0.6, 1.1);
+  A.fadeIn(rsR, t + 3.6, 0.5, {lag: 0.3, dx: -8}); A.pulse(pinR, t + 3.6, 0.6, 1.1);
   A.fadeIn(pinM, t + 6.0, 0.5, {s0: 0.6}); A.fadeIn(rsM, t + 6.6, 0.5, {lag: 0.4, dx: -8});
-  A.fadeIn(pinC, t + 10.6, 0.5, {s0: 0.6}); A.fadeIn(rsC, t + 11.2, 0.5, {dx: -8});
+  A.fadeIn(pinC, t + 10.6, 0.5, {s0: 0.6}); A.fadeIn(rsC, t + 11.2, 0.5, {lag: 0.3, dx: -8});
   A.pulse([pinR, pinM, pinC], t + 14.4, 0.7, 1.08); A.pulse(ckLock, t + 14.6, 0.6, 1.4);
 });
 
@@ -909,13 +910,13 @@ const risk = Card(70, 540, 860, 150, C.orange, {fo: 0.06});
 const riskIc = Pile(...at(risk, 54, 80), 3, {w: 40, h: 52, col: C.purple, lines: 3, parent: risk, o: 1, ox: 5, oy: -6});
 risk.parts = [riskIc, CT(risk, 108, 66, 'Lean proofs may be too large', {size: 30}), CT(risk, 108, 110, 'the main open question', {size: 28, fill: C.orange})];
 beat(11, 17, (t) => {
-  leave([fpH, fpS], t);
-  A.to([rsR, rsM, rsC, pinM, ckDiv2, apL, apP, apP2], t + 0.3, 0.6, {o: 0.3});
+  leave([fpH, fpS, rsR, rsM, rsC], t);
+  A.to([pinM, ckDiv2, apL, apP, apP2], t + 0.3, 0.6, {o: 0.3});
   A.fadeIn(wgH, t + 1.2, 0.6, {dx: -10});
   A.fadeIn(icR, t + 2.6, 0.5, {s0: 0.5}); A.fadeIn(wg[0], t + 2.9, 0.5, {lag: 0.6, dx: -8});
   circumC(KX(160), KY(160), 260, 36, C.blue, t + 3.4, {hold: 2.2}); A.pulse(pinR, t + 3.6, 0.6, 1.1);
   A.fadeIn(icC, t + 6.6, 0.5, {s0: 0.5}); A.fadeIn(wg[1], t + 6.9, 0.5, {lag: 0.6, dx: -8});
-  circumC(KX(115), KY(388), 170, 36, C.purple, t + 7.4, {hold: 2.2}); A.pulse(pinC, t + 7.6, 0.6, 1.1);
+  circumC(KX(115), KY(272), 170, 36, C.purple, t + 7.4, {hold: 2.2}); A.pulse(pinC, t + 7.6, 0.6, 1.1);
   reveal(risk, t + 10.4); A.pulse(riskIc, t + 11.4, 0.6, 1.2);
 });
 
@@ -1028,7 +1029,7 @@ function tick(ts) {
 }
 function play() { if (t >= TOTAL - 0.01) t = 0; playing = true; started = true; last = performance.now(); show(t); requestAnimationFrame(tick); }
 function pause() { playing = false; show(t); }
-const toggle = () => (playing ? pause() : play());
+const toggle = () => (playing ? pause() : (started || (t = 0), play()));
 function next() {
   const i = beatAt(t);
   if (playing) { show(i + 1 < BEATS.length ? BEATS[i + 1].t0 : TOTAL); return; }
@@ -1043,12 +1044,17 @@ function prev() {
   show(i > 0 ? BEATS[i - 1].t1 - 0.02 : 0);
 }
 playBtn.addEventListener('click', toggle);
-bigplay.addEventListener('click', () => { if (t >= TOTAL - 0.01 || !started) t = t >= TOTAL - 0.01 ? 0 : t; play(); });
+bigplay.addEventListener('click', () => { if (t >= TOTAL - 0.01 || !started) t = 0; play(); });
 $('#next').addEventListener('click', next);
 $('#prev').addEventListener('click', prev);
 $('#speed').addEventListener('change', (e) => { speed = +e.target.value; });
 let dragging = false;
-const seekX = (e) => { const r = track.getBoundingClientRect(); started = true; show(TOTAL * Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))); };
+const seekX = (e) => {
+  const r = track.getBoundingClientRect(); started = true;
+  let s = TOTAL * Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  for (const [, ch] of CHAPTERS) { const t0 = BEATS.find((x) => x.ch === ch).t0; if (Math.abs((t0 - s) / TOTAL * r.width) < 6) s = t0 + 0.001; }
+  show(s);
+};
 scrub.addEventListener('pointerdown', (e) => { dragging = true; scrub.setPointerCapture(e.pointerId); seekX(e); });
 scrub.addEventListener('pointermove', (e) => { if (dragging) seekX(e); });
 scrub.addEventListener('pointerup', () => { dragging = false; });
