@@ -530,7 +530,7 @@ function MiniWrap(x, y) {
 const CAP = [
   /* 0 */ 'A sketch of a private payment pool on Ethereum that is identified by its rules rather than by its code. It assumes Ethereum can prove runs of RISC-V programs, a proposed extension.',
   /* 1 */ 'Alice pays Bob 1.2 ETH from a privacy pool. Her wallet attaches a proof that the payment follows the pool’s rules: the notes are hers, never spent before, and the amounts add up. Nobody learns which notes or how much.',
-  /* 2 */ 'The proof comes from a program, P: ordinary code that checks the rules on Alice’s secrets. Ethereum’s prover proves that P ran on Ethereum’s machine, a fixed RISC-V computer, and said yes. So the pool’s contract stores P’s hash and accepts only proofs from P.',
+  /* 2 */ 'The proof comes from a program, P: ordinary code that checks the rules on Alice’s secrets. Ethereum’s prover proves that P ran and said yes on Ethereum’s machine: one exact definition of RISC-V, fixing its instructions, memory, input and output. So the pool’s contract stores P’s hash and accepts only proofs from P.',
   /* 3 */ 'Two problems. Users must trust P, compiled code that almost nobody reads. And the pool is stuck with P: Ethereum can upgrade its prover underneath, but the pool can never switch to a faster or corrected program, unless someone holds an upgrade key, and then users must trust them.',
   /* 4 */ 'The fix: the contract stores the hash of the rules instead, written once in Lean as a short definition that anyone can read and that never runs. Any program is welcome, as long as it is proven to follow these rules.',
   /* 5 */ 'P’s authors then prove a theorem in Lean: whenever P says yes, the rules hold, for every possible input. Lean checks every step of the proof, so once it is accepted, P cannot approve a payment that breaks the rules.',
@@ -690,7 +690,7 @@ const sec = Mini(200, 600, C.red, 'Alice’s secrets', 'her notes and key', {w: 
 sec.parts.push(Lock(...at(sec, 246, 40), C.red, {parent: sec, k: 0.8}));
 const prog = Mini(610, 600, C.teal, 'program <m>P</m>', 'Rust, compiled to RISC-V', {w: 300, h: 150, code: true});
 const mach = new M(610, 610, null, 0); shape(mach, rr(-175, -125, 350, 250, 18), {stroke: C.pink, sw: 2.2, dash: '9 7', fill: C.pink, fo: 0.03});
-const machL = Txt(610, 778, '<k=pink>Ethereum’s machine</k>: a fixed RISC-V computer', {size: 24, anchor: 'middle'});
+const machL = Txt(610, 778, '<k=pink>Ethereum’s machine</k>: one exact definition of RISC-V', {size: 24, anchor: 'middle'});
 const aSP = Arrow(346, 600, 446, 600, C.red), fSP = Flash(aSP.pathD, C.red);
 const yesT = Tag(862, 600, 'says yes', C.green, {size: 24});
 const aPr = Arrow(934, 600, 1272, 600, C.gold), fPr = Flash(aPr.pathD, C.gold);
