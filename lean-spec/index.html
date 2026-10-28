@@ -528,28 +528,28 @@ function MiniWrap(x, y) {
 
 /* ---------------- words (verbatim from the spec) ---------------- */
 const CAP = [
-  /* 0 */ 'Alice pays Bob privately through a pool identified by its rules, written in Lean, rather than by its code. This sketch assumes Ethereum proves RISC-V programs natively, as the proposed EIP-8288 program lane would. Lean never runs on chain.',
+  /* 0 */ 'Alice pays Bob privately through a pool identified by its rules, written in Lean, rather than by its code. This sketch assumes Ethereum proves RISC-V programs natively, as a proposed extension of EIP-8288 would. Lean never runs on chain.',
   /* 1 */ 'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing no amount but the fee.',
   /* 2 */ 'Her wallet keeps the witness private: the notes she spends, the key that owns them, their Merkle paths and her new notes. The public statement hides every amount but the fee and is bound to this exact transaction.',
-  /* 3 */ 'What must her proof show? That her secrets satisfy the pool’s rules against the public statement: her notes are in the pool, they are hers, each nullifier comes from her key and its note, the new notes are sealed correctly, and the amounts balance.',
-  /* 4 */ 'A program checks those rules on her witness: P, written in any language, say Rust, and compiled to RISC-V. leanVM, Ethereum’s prover for RISC-V and unrelated to the Lean language despite its name, proves each run. In the proposed program lane, the pool’s contract pins P’s hash.',
-  /* 5 */ 'That pin is the problem. Users must trust P, compiled code that almost nobody reads, and an immutable pool can never adopt a faster program; an upgradable one asks users to trust whoever upgrades it. What if the pool pinned its rules instead?',
+  /* 3 */ 'What must her proof show? That her secrets satisfy the pool’s rules against the public statement: her notes are in the pool, they are hers, each nullifier, a tag that marks a note spent, comes from her key and its note, the new notes are well formed, and the amounts balance.',
+  /* 4 */ 'A program checks those rules on her witness: P, written in any language, say Rust, and compiled for the machine, the exact RISC-V computer Ethereum would prove: its instructions, memory layout, input and output. leanVM, today’s prover for that machine and unrelated to the Lean language, proves each run. The pool’s contract pins P’s hash.',
+  /* 5 */ 'That pin is the problem. Users must trust P, compiled code that almost nobody reads. Ethereum’s upgrades can still swap the prover underneath, so the same P gets faster proofs, but an immutable pool can never change P itself, not even to fix a bug; an upgradable one asks users to trust whoever upgrades it. What if the pool pinned its rules instead?',
   /* 6 */ 'So the developers write the same rules once, as a short Lean definition: a condition on the statement and the witness, never compiled or run. The question becomes: does program P follow these rules?',
-  /* 7 */ 'P’s authors answer with a Lean proof of one theorem: in every run the machine accepts, on any advice, the witness P was given satisfies the rules. Naming that witness matters: many privacy statements have some witness no matter what, so “a witness exists” would let a program that skips a check pass.',
+  /* 7 */ 'P’s authors answer with a Lean proof of one theorem: in every run the machine accepts, whatever extra input the prover adds, the witness P was given satisfies the rules. Naming that witness matters: many privacy statements have some witness no matter what, so “a witness exists” would let a program that skips a check pass.',
   /* 8 */ 'The theorem is only as strong as its description of the machine. Describe a machine that accepts no runs, and every program, even one that steals, “follows the rules”. So the pool pins one machine description, ideally the machine’s official definition written in Lean.',
-  /* 9 */ 'Lean proofs can be gigabytes, so a program checks them: the Lean checker, two independent Lean kernels compiled to RISC-V. It writes the theorem itself from the pinned rules, machine and program, so a proof cannot redefine addition, add an axiom or quietly prove something else.',
-  /* 10 */ 'Here is the bridge. Ethereum cannot check a Lean proof, but checking one is just a program run, and leanVM proves program runs. Anyone runs the checker once, off chain, and leanVM proves that run, once it supports runs this long. The result is a small certificate naming four hashes.',
+  /* 9 */ 'Lean proofs can be gigabytes, so a program checks them: the Lean checker: two independent Lean kernels, Lean’s small proof-checking core, compiled to RISC-V. It writes the theorem itself from the pinned rules, machine and program, so a proof cannot redefine addition, add an axiom or quietly prove something else.',
+  /* 10 */ 'Here is the bridge. Ethereum cannot check a Lean proof, but checking one is just a program run, and leanVM proves program runs. Anyone runs the checker once, off chain, and leanVM proves that run, once it supports runs this long. The result is a small certificate naming four hashes: the rules, the machine description, P and the Lean proof.',
   /* 11 */ 'The pool’s contract pins three hashes at deployment, and no program: its rules, the machine description and the Lean checker, which also fixes the Lean version. These pins are the pool’s identity. Its approved list starts empty; in this pool, anyone with a matching certificate may add a program.',
   /* 12 */ 'An EIP-8288 dependency is a claim the block must prove: this program ran and output this hash. The approval transaction claims that the checker ran and output the certificate’s hashes, carries the certificate beside it, and calls the pool’s approve function.',
   /* 13 */ 'The contract never verifies the certificate: mempool nodes and the block proof do, as for any dependency. It checks only the claim: a real dependency frame, keyed by its checker, whose output hash matches its pins, P and the Lean proof’s hash. The same bytes in ordinary calldata would be unproven.',
   /* 14 */ 'Back to Alice. Her wallet runs P on her witness and leanVM proves the run: an ordinary program proof, about 0.15 s in a development test without zero knowledge. No Lean is involved.',
-  /* 15 */ 'Her transaction is the usual private transfer: the pool is the sender, her nullifiers are single-use nonce keys (EIP-8250), and the dependency names P and her statement’s hash. The pool’s VERIFY frame adds one check, a read of its own storage: is P approved? It never verifies a proof.',
-  /* 16 */ 'Each mempool node checks the nonce keys are unused, runs the validation frames and verifies her proof. Every second it merges the proofs it holds into one recursive proof and forwards it, as EIP-8288 specifies. Nothing about Lean happens here.',
+  /* 15 */ 'Her transaction is the usual private transfer, an EIP-8141 frame transaction: a list of steps called frames. The pool is the sender, her nullifiers are single-use nonce keys (EIP-8250), and the dependency names P and her statement’s hash. The pool’s VERIFY frame, where it accepts the transaction, adds one storage read: is P approved? It never verifies a proof.',
+  /* 16 */ 'Each mempool node checks the nonce keys are unused, runs the frames up to VERIFY and verifies her proof. Every second it merges the proofs it holds into one recursive proof and forwards it, as EIP-8288 specifies. Nothing about Lean happens here.',
   /* 17 */ 'The builder puts one block proof in the header, covering every dependency in the block. Validators check it once and run the frames. Alice’s payment settles, and Lean appeared nowhere in the mempool or the block.',
-  /* 18 */ 'Months later, someone writes a faster program, P2, proves in Lean that it follows the same rules and sends one approval. Wallets switch; the rules and pins stay put, which the code-pinned pool could not do. A fork may also swap leanVM’s proof system: approvals are stored results.',
-  /* 19 */ 'Who may approve is the pool’s choice: a fixed list approved during setup, a governance key, or, as here, anyone with a certificate. An immutable open pool stays tied to its checker; it can require two independent checkers or, if forks ever offer one, follow a fork-maintained checker list.',
+  /* 18 */ 'Months later, someone writes a faster program, P2, proves in Lean that it follows the same rules and sends one approval. Wallets switch; the rules and pins stay put, which the code-pinned pool could not do. Forks, Ethereum’s network upgrades, still swap the prover under both pools; approvals are already recorded, so nothing is re-proven.',
+  /* 19 */ 'Who may approve is the pool’s choice: a list fixed at setup, a governance key, or, as here, anyone with a certificate. Fixed and open pools keep their pins forever, so new programs must target the same machine version, and an open pool stays tied to its checker: it can require two independent checkers or, if forks ever offer one, follow a fork-maintained checker list.',
   /* 20 */ 'What can go wrong maps onto the pieces. Wrong rules can drain the pool, like a contract bug today. A checker bug reaches pools that pinned that checker. A machine description that misses runs reaches every pool that pins it, and a prover bug every program. The biggest open risk: Lean proofs may be too large to check.',
-  /* 21 */ 'Ethereum enshrines no language but its machine. The rules, the machine description and the checker are chosen by each contract, by hash. Wallets check those choices and the contract’s own code, and show users the rules: a public record of which programs were checked against which rules.',
+  /* 21 */ 'Ethereum enshrines only its machine: no programming language, and no Lean. The rules, the machine description and the checker are chosen by each contract, by hash. Wallets check those choices and the contract’s own code, and show users the rules: a public record of which programs were checked against which rules.',
   /* 22 */ 'Recap. The contract pins only the rules’ hash, and the Lean proof stays off chain; the checker’s run becomes a certificate that approves a program once. Alice’s witness never leaves her wallet, and her program proof travels through the mempool into the block’s one proof.',
   /* 23 */ 'Three layers. Users rely on the rules, pinned by hash. Programs come and go, each tied to the rules once by a Lean proof that the checker turned into a certificate. Ethereum proves only runs of its machine, on every payment, and never runs Lean.',
 ];
@@ -559,7 +559,7 @@ const NOTE = [
   /* 2 */ 'The witness is the private input, the statement the public input. Here the statement is exactly the journal, the bytes the machine hashes into the dependency’s `data_hash`: the pool’s public inputs themselves, with the program lane’s domain label, chain and contract, so the contract can rebuild the same bytes. Commitments hide amounts and owners; only her key links a nullifier to its note.',
   /* 3 */ 'These are the minimal shielded pool’s rules: the spent notes are in the pool’s Merkle tree, the spending key owns them, each nullifier is derived from the key and the note, the new note commitments are well formed, and value balances with the public fee. The proof must show them without revealing the witness.',
   /* 4 */ 'The program is a canonical image for the exposed machine, identified by its `image_id` as the program lane defines it (RISC-V, `ERV64_V1`). Wallets prove runs of it with leanVM; Lean is never compiled or turned into a circuit. In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program, a bet on code whose speed keeps changing. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
-  /* 5 */ 'In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program. A fork can swap the prover, PCS, hash or field underneath, but not the program. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
+  /* 5 */ 'In the proposed program lane, a contract checks a dependency `(ERV64_V1, data_hash, image_id)` and so pins one program. The lane is versioned: a fork can swap the prover, PCS, hash or field underneath, and old machine versions stay provable, so an immutable pool keeps working without migrating. What it can never change is the program: no bug fix, no faster code, no use of a later machine version’s instructions. None of this is deployed: today’s privacy pools verify Groth16 or PLONK proofs in the EVM.',
   /* 6 */ 'The rules are a Lean predicate `R : Bytes → Bytes → Prop` on the statement and the witness, in encodings `R` itself decodes. `spec_id` hashes a canonical encoding of `R` and every declaration it uses above the checker’s prelude. The witness is explicit: a rule of the form ∃ w, R pub w holds for every public input in many privacy protocols, so a program that skipped a check could still be proven sound.',
   /* 7 */ 'The Lean proof (the soundness proof) proves `∀ pub w adv, M.Run prog pub w adv → R pub w`. `M.Run` is the machine description, `prog` the program’s bytes, `adv` free advice and `w` the contents of the program’s witness region, so a payment proof shows knowledge of a valid witness, not just that one exists. `model_id` hashes the machine description. The closest example, sig.golf’s proofs about small RISC-V images plus security bounds, exported to 8.3 GB.',
   /* 8 */ 'The model `M.Run` must accept every run the prover can prove: advice and uninitialised memory quantified, no tighter step bound, the whole canonical image decoded as the loader does. If it is the Lean form of the machine’s normative definition, any gap is a prover bug a fork fixes for every program. leanVM’s formal verification so far covers an earlier six-instruction machine.',
@@ -573,7 +573,7 @@ const NOTE = [
   /* 16 */ 'Mempool nodes check the nonce keys, run the validation frames and verify the program proof against `(ERV64_V1, data_hash, image_id)`. EIP-8288 sets `AGGREGATION_INTERVAL` to 1000 ms: every second a node merges the proofs it holds into one recursive proof and forwards it. EIP-8141 allows one pending frame transaction per account and EIP-8250 keeps that limit; more, on disjoint nonce keys, is left to a future mempool policy.',
   /* 17 */ 'The header field `recursive_stark` holds the block proof and `block_deps_hash`, a hash of the sorted, deduplicated dependencies’ `data_hash` and key (not the scheme), as in EIP-8288. A block is valid only if its block proof covers every dependency it declares and every transaction is valid. Upstream EIP-8288 defines only leanSPHINCS and reserves leanSTARK; the program scheme keyed by `image_id` exists only in the program-lane proposal.',
   /* 18 */ 'A faster program needs only a new Lean proof and certificate: open and governed pools approve it, a fixed pool cannot. Removing a program invalidates the pool’s own pending transactions that use it. Each dependency names its program, so the anonymity set splits by program: keep few approved. A new prover, PCS, internal hash or field for the same machine leaves contracts unchanged, since the statement digest and `image_id` are fixed by the program lane and approvals are stored results. A new Lean release changes nothing on chain.',
-  /* 19 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. Two independent checkers take two approval transactions, since EIP-8288 allows one STARK dependency per transaction. A checker list that forks maintain, offered as a precompile, would let a fork drop a broken checker for every pool that opts in; `approve` can query it, and payments too if approvals record their `checker_id`, and no Lean enters consensus.',
+  /* 19 */ 'Fixed: programs approved during setup, then `approve` is disabled for good. Governed: a governance key approves, removes programs or changes pins; changing a pin clears every approval made under the old pins. Open: anyone with a certificate approves and nobody can remove, so exposure to a checker bug keeps growing. `model_id` names one machine version, so fixed and open pools only ever run programs for that version; old versions stay provable, and only a governed pool can re-pin to a new one, which clears its approvals. Two independent checkers take two approval transactions, since EIP-8288 allows one STARK dependency per transaction. A checker list that forks maintain, offered as a precompile, would let a fork drop a broken checker for every pool that opts in; `approve` can query it, and payments too if approvals record their `checker_id`, and no Lean enters consensus.',
   /* 20 */ 'A checker bug needs both kernels to fail, or sits in the wrapper, its build or the logic; the remedy is to re-check approved proofs with a corrected checker. A prover bug can forge approvals that outlive the fix; governed pools remove them by recorded block number. A machine description narrower than the machine affects fixed pools too; if it is the machine’s official definition, any gap is a prover bug that a fork fixes for everyone. sig.golf’s proofs about small RISC-V images plus security bounds, 8.3 GB, took 3,666 s and 17.8 GB of memory to replay.',
   /* 21 */ 'Ethereum enshrines only its machine (`ERV64_V1` in the program lane) and its prover. Before trusting a pool, a wallet reads its pins and approved set, checks that the published rules hash to `spec_id`, that `model_id` and `checker_id` are ones it recognises, and that the contract’s own code matches a known template, since the rules cover only the proving program. The chain records which programs were checked against which rules.',
   /* 22 */ 'On chain: the pins, the approved set and each transaction’s dependency, all settled by one block proof. Off chain: the rules (published, ideally also kept in state), the Lean proof (authenticated by its `export_hash`), the witness (in the wallet) and the certificate (once, in a mempool wrapper). Still open in the design note: the size and cost of Lean proofs about compiled code, the checker as a provable RISC-V program (continuations or a split), a Lean model of the machine’s official definition, the scheme in the block statement and a standard checker.',
@@ -778,10 +778,10 @@ witC.base.x = 210; witC.base.y = 600;
 const prog = ProgMini(640, 600);
 const aWP = Arrow(386, 600, 487, 600, C.red), fWP = Flash(aWP.pathD, C.red);
 const aPV = Arrow(796, 600, 1336, 600, C.gold), fPV = Flash(aPV.pathD, C.gold);
-const lvLbl = Txt(1063, 580, 'leanVM: Ethereum’s RISC-V prover', {size: 24, fill: C.gold, anchor: 'middle'});
+const lvLbl = Txt(1063, 580, 'leanVM: today’s prover for the machine', {size: 24, fill: C.gold, anchor: 'middle'});
 const lvNote = Txt(1063, 638, 'unrelated to the Lean language, despite the name', {size: 20, fill: C.dim, anchor: 'middle'});
 const proofB = Badge(1400, 600, {k: 1.2});
-const progLang = Txt(640, 720, 'written in any language, e.g. Rust  →  compiled to RISC-V', {size: 22, fill: C.dim, anchor: 'middle'});
+const progLang = Txt(640, 720, 'written in any language, e.g. Rust  →  compiled for the machine', {size: 22, fill: C.dim, anchor: 'middle'});
 const hashChip = MChip(640, 452, '<c>image_id</c>  =  hash of <m>P</m>', C.teal, {w: 300, size: 22});
 const pc = Card(860, 50, 700, 290, C.teal, {fo: 0.05});
 const pcT = CT(pc, 28, 52, 'pool contract', {size: 32, fill: C.teal});
@@ -794,6 +794,8 @@ const pcSpec = MC(pc, 350, 180, '<c>spec_id</c>  ·  the rules', C.blue, {w: 340
 const pcQ = Quest(...at(pc, 566, 180), C.yellow, {parent: pc, r: 24});
 const aPin = Arrow(796, 440, 1032, 238, C.teal, {sw: 2.5, head: 12});
 /* The pipeline starts centred on the stage and moves down to make room for the contract. */
+const machDef = Txt(800, 806, '<k=pink>the machine</k>: the exact RISC-V computer Ethereum would prove, with fixed instructions, memory layout, input and output', {size: 22, anchor: 'middle'});
+const machSub = Txt(800, 846, 'forks can replace its prover, never the meaning of a machine version', {size: 20, fill: C.dim, anchor: 'middle'});
 const pipe = [witC, prog, aWP, fWP, aPV, fPV, lvLbl, lvNote, proofB, progLang];
 pipe.forEach((m) => { m.base.y -= 150; });
 beat(4, 18, (t) => {
@@ -806,6 +808,7 @@ beat(4, 18, (t) => {
   A.draw(aPV, t + 5.4, 0.6); A.fadeIn(lvLbl, t + 5.7, 0.5); A.flash(fPV, t + 6.0, 0.6);
   A.fadeIn(proofB, t + 6.5, 0.5, {s0: 0.4}); A.pulse(proofB, t + 7.0, 0.6, 1.15);
   A.fadeIn(lvNote, t + 7.8, 0.5, {dy: 6});
+  A.fadeIn(machDef, t + 8.2, 0.5, {dy: 6}); A.fadeIn(machSub, t + 8.6, 0.5, {dy: 6});
   pipe.forEach((m) => A.to(m, t + 9.0, 1.0, {y: m.base.y + 150}));
   A.draw(pc, t + 10.0, 1.2); A.write(pcT, t + 10.4, 0.7); A.fadeIn([pcLock, pcImm], t + 10.8, 0.5); A.draw(pcDiv, t + 10.7, 0.5);
   A.fadeIn(pcPinsL, t + 11.4, 0.5);
@@ -830,13 +833,15 @@ const p2 = Mini(330, 230, C.teal, 'program <m>P</m> 2', 'faster', null, {w: 30
 const p2A = Arrow(578, 230, 798, 230, C.teal, {sw: 2.5, head: 12});
 const p2X = Cross(826, 230, C.red, {k: 1.2});
 const p2Fix = Txt(690, 284, 'the pin is fixed', {size: 22, fill: C.red, anchor: 'middle'});
-const pLbl2 = NumLbl(286, 352, 2, 'an immutable pool can never switch', C.red);
+const pLbl2 = NumLbl(200, 352, 2, 'an immutable pool can never change <m>P</m>, even to fix a bug', C.red);
 const upC = Card(900, 470, 640, 150, C.grey, {fo: 0.03});
 upC.parts = [IconKey(...at(upC, 50, 52), C.grey, {parent: upC, k: 1.1}), CT(upC, 92, 62, 'upgradable instead?', {size: 26, fill: C.dim}),
   CT(upC, 28, 118, 'then trust whoever upgrades it', {size: 24})];
-const probAll = [pCode, pQ, pWho, pLbl1, p2, p2A, p2X, p2Fix, pLbl2, upC, prog];
+const stillOk = Check(900, 402, C.green, {k: 0.8});
+const stillT = Txt(926, 410, 'still upgraded by forks: the prover, so the same <m>P</m> proves faster', {size: 22, fill: C.green});
+const probAll = [pCode, pQ, pWho, pLbl1, p2, p2A, p2X, p2Fix, pLbl2, upC, prog, stillOk, stillT];
 beat(4, 21, (t) => {
-  A.fadeOut([witC, aWP, aPV, lvLbl, lvNote, proofB, progLang, hashChip, aPin], t, 0.5);
+  A.fadeOut([witC, aWP, aPV, lvLbl, lvNote, proofB, progLang, hashChip, aPin, machDef, machSub], t, 0.5);
   A.pulse(pcImg, t + 0.6, 0.6, 1.12);
   A.to(prog, t + 0.8, 1.0, {x: 250});
   A.fadeIn(pCode, t + 2.0, 0.6, {dx: -40}); A.fadeIn(pQ, t + 2.8, 0.5, {s0: 0.4}); A.fadeIn(pWho, t + 3.2, 0.5, {dx: -8});
@@ -846,7 +851,8 @@ beat(4, 21, (t) => {
   A.draw(p2A, t + 7.6, 0.6);
   A.draw(p2X, t + 8.2, 0.3); A.pulse(p2X, t + 8.5, 0.5, 1.4); A.to(p2, t + 8.3, 0.4, {x: 396}); A.fadeIn(p2Fix, t + 8.7, 0.5, {dy: 6});
   A.fadeIn(pLbl2, t + 9.6, 0.5, {dy: 6});
-  reveal(upC, t + 11.6);
+  A.fadeIn(stillOk, t + 10.6, 0.4, {s0: 0.5}); A.fadeIn(stillT, t + 10.8, 0.5, {dx: -8});
+  reveal(upC, t + 12.2);
   A.to(probAll, t + 15.4, 0.6, {o: 0.35});
   /* The pin swaps in two steps, so the two labels never sit on top of each other. */
   A.fadeOut(pcImg, t + 16.2, 0.4); A.fadeIn(pcSpec, t + 16.6, 0.5, {s0: 0.8});
@@ -891,8 +897,8 @@ const lpAbout = [Txt(584, 146, 'about', {size: 20, fill: C.dim, anchor: 'middle'
 const thmH = Txt(800, 308, 'the theorem the Lean proof proves', {size: 22, fill: C.dim, anchor: 'middle'});
 const THM = CodeLine(800, 362, [['∀'], [' pub '], ['w'], [' adv, '], ['machine.Run', 'pink'], [' '], ['P', 'teal'], [' pub '], ['w'], [' adv '], ['→'], [' '], ['rules', 'blue'], [' pub '], ['w']], {size: 34});
 const WI = [8, 14], wRed = WI.map((i) => tokCopy(THM, i, C.red));
-const thmG = Txt(800, 414, '<c><k=pink>machine.Run</k></c>: a Lean description of RISC-V: <m>P</m>, given statement <c>pub</c>, witness <c>w</c> and any advice <c>adv</c>, accepts', {size: 22, fill: C.dim, anchor: 'middle'});
-const pillAll = Tag(800, 478, 'for every statement, witness and advice', C.ink, {size: 24});
+const thmG = Txt(800, 414, '<c><k=pink>machine.Run</k></c>: the machine, described in Lean: <m>P</m>, given statement <c>pub</c>, witness <c>w</c> and any extra prover input <c>adv</c>, accepts', {size: 22, fill: C.dim, anchor: 'middle'});
+const pillAll = Tag(800, 478, 'for every statement, witness and extra input', C.ink, {size: 24});
 const GH = CodeLine(430, 602, [['∃'], [' '], ['w'], [', '], ['rules'], [' pub '], ['w']], {size: 30, fill: C.dim});
 const ghH = Txt(430, 556, 'if the theorem said only', {size: 20, fill: C.dim, anchor: 'middle'});
 const ghPill = Tag(430, 662, 'true for every statement in many privacy protocols', C.grey, {size: 22, tc: C.dim});
@@ -1451,14 +1457,15 @@ const who = WHO.map(([name, Ic, col, a, b, c], i) => {
 });
 const openRed = Txt(7720, 572, 'exposed to its checker’s bugs', {size: 26, fill: C.red, anchor: 'middle'});
 const openLine = Line(7500, 536, 7940, 536, C.red, {sw: 3});
-const advice = Txt(7200, 720, 'an immutable open pool: two independent checkers, or a proposed fork-maintained checker list', {size: 28, anchor: 'middle'});
+const advice = [Txt(7200, 690, 'fixed and open pools keep their pins: one checker, one machine version', {size: 28, anchor: 'middle'}),
+  Txt(7200, 740, 'an open pool can require two independent checkers, or use a proposed fork-maintained checker list', {size: 22, fill: C.dim, anchor: 'middle'})];
 beat(18, 18, (t) => {
   cutTo(t, 7200);
   A.fadeOut([ck, upT, rpLbl, cpC, cpLbl, cpX, p2B, prog2, LP2, LP2L, LP2s, chkChip, cert2, appr2, a17, aTo, wal, walL, walS, walP2, fkC], t + 0.6, 0.1);
   A.fadeIn(whoT, t + 1.4, 0.6);
   who.forEach((m, i) => reveal(m, t + 2.4 + 2.6 * i));
   A.draw(openLine, t + 10.6, 0.5); A.fadeIn(openRed, t + 10.9, 0.5, {dy: 6});
-  A.fadeIn(advice, t + 13.0, 0.6, {dy: 8});
+  A.fadeIn(advice[0], t + 13.0, 0.6, {dy: 8}); A.fadeIn(advice[1], t + 14.4, 0.6, {dy: 8});
 });
 
 /* 20. Upgrade: what can go wrong, each failure shown with the piece it hits */
@@ -1500,7 +1507,7 @@ beat(18, 23, (t) => {
 /* 21. Upgrade: what Ethereum enshrines, what each contract chooses, what wallets check */
 const fixC = Card(9640, 150, 640, 330, C.ink, {fo: 0.04});
 fixC.parts = [CT(fixC, 32, 62, 'enshrined by Ethereum', {size: 34}), Lock(...at(fixC, 590, 50), C.ink, {parent: fixC}), CLine(fixC, 20, 92, 620, 92, C.rule),
-  Dot(...at(fixC, 46, 152), C.ink, {r: 5, parent: fixC}), CT(fixC, 70, 160, 'no language but its machine', {size: 28}), CT(fixC, 70, 200, '(RISC-V, <c>ERV64_V1</c>)', {size: 24, fill: C.dim}),
+  Dot(...at(fixC, 46, 152), C.ink, {r: 5, parent: fixC}), CT(fixC, 70, 160, 'only its machine: RISC-V', {size: 28}), CT(fixC, 70, 200, '<c>ERV64_V1</c>; no language, no Lean', {size: 24, fill: C.dim}),
   Dot(...at(fixC, 46, 262), C.ink, {r: 5, parent: fixC}), CT(fixC, 70, 270, 'its prover can change by fork', {size: 24, fill: C.dim})];
 const choC = Card(10340, 150, 820, 330, C.purple, {fo: 0.04});
 const CHO = [['rules', 'spec_id', C.blue], ['machine description', 'model_id', C.pink], ['Lean checker', 'checker_id', C.purple]];
