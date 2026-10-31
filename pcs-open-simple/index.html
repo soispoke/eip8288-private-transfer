@@ -55,7 +55,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
 .tick{position:absolute;top:-4px;width:2px;height:12px;margin-left:-1px;background:var(--faint)}
 .time{font-variant-numeric:tabular-nums;color:var(--dim);font-size:14px;min-width:84px;text-align:right}
 .speed{font:14px var(--ui);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:8px;height:38px;padding:0 8px}
-.caption{margin:2px auto 0;max-width:64ch;text-align:center;font-size:clamp(17px,1.9vw,21px);line-height:1.55;min-height:4.7em;text-wrap:pretty}
+.caption{margin:2px auto 0;max-width:64ch;text-align:center;font-size:clamp(17px,1.9vw,21px);line-height:1.55;min-height:7.8em;text-wrap:pretty}
 .caption code,.note code{font-family:var(--mono);font-size:.9em;color:var(--blue-l)}
 .caption .pi,.note .pi{font-family:var(--math);font-style:italic}
 .spec{max-width:80ch;margin:0 auto;width:100%;border-top:1px solid var(--rule);padding-top:10px;color:var(--dim)}
@@ -71,6 +71,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
 <main class="wrap">
   <header class="top">
     <h1>How PCS_open Works (simple version)</h1>
+    <a class="altver" href="../pcs-open/" style="color:var(--dim);font-size:15px;align-self:center">detailed version →</a>
     <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
   </header>
   <div class="stagebox">
@@ -530,26 +531,26 @@ function MiniWrap(x, y) {
 const CAP = [
   'Alice pays Bob privately with a post-quantum proof. With `PCS_open`, checking it splits in two: a light check that every node runs as the pool’s code in its EVM, and a heavy one that nodes do natively and merge into one proof per block.',
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
-  'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes the signature hash, a hash of this transaction.',
+  'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes the signature hash, a hash of this transaction without its signature bytes, where the proof will travel.',
   'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
-  'Her wallet runs the pool’s circuit, its rules written as simple arithmetic checks, on her secrets and the statement. Out comes a post-quantum proof in two parts: a small proof π, a few hundred bytes, and opening proofs, about 150 KB each, which vouch for the values π uses.',
-  'The opening proofs are most of the work of checking a STARK and the same kind for every app, so nodes check them natively and merge them once per block. π is small and specific to the pool, so the pool’s own code checks it, in the EVM. That part of the proof system is called the PIOP.',
+  'Her wallet runs the pool’s circuit, its rules written as simple arithmetic checks, on her secrets and the statement. Out comes a post-quantum proof (a STARK) in two parts: a small proof π, a few hundred bytes to about 2 KB, and opening proofs, about 150 KB each.',
+  'π holds R, a 32-byte commitment to her data made with a polynomial commitment scheme (PCS, WHIR today), and a few values of that data at a random point z. The opening proofs show those values are genuine. They are most of a STARK’s cost and alike for every app, so nodes check them natively and merge them per block; the pool’s code checks π itself, in the EVM: that part is the PIOP.',
   'Her frame transaction (EIP-8141) has three frames: the first checks her Merkle root is recent (EIP-8272), the pool’s `VERIFY` frame approves it and pays the fee, and the `SENDER` frame adds the new notes. EIP-8288 as written adds a fourth frame asking nodes to check a proof of the pool’s whole program; here the pool keeps its own circuit and PIOP.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π sits where a signature would and authorizes this exact transaction.',
-  'The pool’s code does its usual checks, then checks π: it recomputes the random point π was built on and checks π’s equation there, using `MUL_FIELD`, a new instruction for cheap binary-field arithmetic. What it can’t check is that π’s values are genuine.',
-  'So for each of those values the code calls `PCS_open`, a new precompile that only records a claim: this value of the data committed in R, or in the circuit’s commitment C, is right. Nodes check every claim natively, outside the EVM, and a block with a false claim is invalid, so the pool can approve now.',
-  'The wallet made its opening proofs for exactly these claims. The claims depend on the statement, which includes the signature hash, so they fit no other transaction, and a proof for any other claim fails. The claims are the only link between the pool’s check and the opening proofs.',
-  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. The claims are not sent. Each node checks the nonce keys, runs the first two frames in the EVM to derive the claims itself, then checks each opening proof natively against its claim.',
-  'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards that instead.',
+  'The pool’s code does its usual checks, then checks π: it recomputes z as a hash of the statement (with its signature hash) and R, and checks π’s equation at z with `MUL_FIELD`, a new binary-field multiplication. The equation also needs the circuit’s fixed tables at z, too big for the EVM, so the code keeps only their commitment C, and π carries their value c.',
+  'For each commitment the code calls `PCS_open` once, a new precompile that only records a claim: here, that the data committed in R has value v at z, and likewise c for C. Nodes check every claim natively, outside the EVM, and a block with a false claim is invalid, so the pool can approve now.',
+  'The wallet computed the same z, so it made opening proofs for exactly these claims. Since z hashes the statement, which includes the signature hash, the claims fit only this transaction, and proofs for other claims fail. The claims are the only link between the pool’s check and the opening proofs.',
+  'The transaction travels with its opening proofs beside it, in an EIP-8288 mempool wrapper that never goes on chain. The claims are not sent. Each node checks the nonce keys, runs the first two frames in the EVM to derive the claims itself, then checks the opening proofs natively against them.',
+  'Every second, as in EIP-8288, each node merges the opening proofs it holds into one recursive STARK, a single proof that all of them are valid, and forwards it with the transactions. The next node checks that one STARK against the claims it derived itself.',
   'The builder runs the transactions too, which gives it their claims, and merges their opening proofs into one final STARK in the header, next to a hash of the claim list. Validators do the same to rederive the claims, check that the STARK proves exactly that list, and settle Alice’s transfer.',
-  'So Alice’s proof splits along the EVM boundary: each dApp keeps its own circuit and PIOP, frozen in its code and run in every node’s EVM, while the opening proofs are checked natively and merged into the block’s one STARK, beside other lanes of claims. A fork can upgrade the PCS, but not the binary field.',
+  'So Alice’s proof splits along the EVM boundary: each dApp’s PIOP verifier and circuit commitment are frozen in its code and run in every node’s EVM, while the opening proofs are checked natively and merged into the block’s one STARK, beside other lanes of claims. A fork can upgrade the PCS, but not the binary field.',
   'Years later, a better PCS appears, say WHIR 2.0. Every `PCS_open` call takes its version from π, not from the contract, so a fork can add WHIR 2.0 as version 2; forks decide which versions count. Wallets make fresh commitments in every proof, so they simply switch.',
   'The hard part is C₁, the circuit commitment made under version 1: unlike R, it is fixed in the pool’s code. Each live version is another verifier in every node and another circuit in the block’s STARK, so a fork wants to retire version 1, at once if it breaks. Then nobody could open C₁, and the pool would stop working.',
-  'While version 1 still works, anyone recommits the same circuit under version 2, giving C₂, and opens both at the same random point. If the values match, C₂ holds the same data: two different polynomials almost never agree at a random point.',
-  'A proposed system contract, which `PCS_open` consults, records that C₂ is equivalent to C₁. A claim is about the committed data, not the commitment, so the wallet opens the pool’s claims on C₁ through C₂. The pool’s code never changes, and version 1 can be retired.',
+  'While version 1 still works, anyone commits the same fixed tables under version 2, giving C₂, and opens both at the same random point. If the values match, and C₂ binds a single polynomial (rule 2 below), C₂ holds the same data: committed data is read as a polynomial, and two different polynomials almost never agree at a random point.',
+  'A proposed system contract, which `PCS_open` consults, records that C₂ is equivalent to C₁. A claim is about the committed data, not the commitment, so the wallet opens the pool’s claims on C₁ through C₂. The pool’s code never changes, and once every fixed commitment has moved, version 1 can be retired.',
   'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. Each added commitment stands for the circuit, so it must fix exactly one polynomial. And the move happens before version 1 breaks, since the check trusts its opening proofs.',
   'What stays fixed in the protocol is small, because contracts are written against it: the binary field, `MUL_FIELD` and what a claim means. The PCS, its opening proofs and how they are merged can be upgraded by fork. Each dApp’s PIOP is frozen with its contract, and the dApp answers for it.',
-  'Recap: where everything lives. The circuit is in the pool’s GitHub, and the witness never leaves the wallet. On chain: the pool’s code, π in each transaction, and one STARK per block. Opening proofs stay in the mempool, and claims are never sent: every node rederives them.',
+  'Recap: where everything lives. The circuit is in the pool’s GitHub, pinned by C in the pool’s code, and the witness never leaves the wallet. On chain: the pool’s code and state, each transaction with its statement and π, and one STARK per block. Opening proofs stay in the mempool, and claims are never sent: every node rederives them.',
   'Nodes run each contract’s PIOP in their EVM and check the opening proofs natively, merging them recursively. A fork can upgrade the PCS, never a contract’s PIOP.'
 ];
 const NOTE = [
@@ -557,12 +558,12 @@ const NOTE = [
   'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative.',
   'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The signature hash is a hash of the whole transaction except its signature bytes, where π travels, so the statement can include it without depending on π. Hashes are Keccak-256.',
   'In proof-system terms the statement is the public input, the witness the private input, and the pool’s rules the relation between them. A nullifier is a hash of the note and her key: the same note always gives the same nullifier, so a second spend is caught, yet no one else can tell which note it belongs to. Zero knowledge means the proof reveals nothing about the witness beyond the fact that a valid one exists.',
-  'Under the hood (the detailed version walks through each step): running the circuit fills a table, the trace, read as one polynomial f and committed with a polynomial commitment scheme (PCS, WHIR today) into a 32-byte Merkle root R. π holds R and a few values of f at one random point z, a hash of the statement and R (Fiat–Shamir), chosen so a wrong trace fails an equation there; the logic that checks this equation is the PIOP. Each opening proof, one per commitment, shows that the values claimed for it really are the committed polynomial’s values at z, with Merkle paths to about 100 random spots of its encoding. The values in π are blinded so they reveal nothing.',
+  'Under the hood (the detailed version walks through each step): running the circuit fills a table, the trace, read as one polynomial f and committed with a polynomial commitment scheme (PCS, WHIR today) into a 32-byte Merkle root R. π holds R and the values of f (and of the circuit’s fixed tables) at one random point z, a hash of the statement and R (Fiat–Shamir), where a wrong trace would fail the PIOP’s equation. Each opening proof, one per claim, shows that the claimed values really are the committed polynomial’s values at z, with Merkle paths to about 100 random spots of its encoding. The values in π are public, so the pool’s PIOP must blind them, which is the dApp’s responsibility. Here π names the small proof the pool checks; on the design page, π in `pOpen(v, C, x, y, π)` names the opening proof instead.',
   'Model estimates for a Keccak withdrawal over GF(2¹⁹²) in a gas model: about 408 bytes of proof with 5 claims (3 fresh, 2 fixed) for a univariate PLONK design, or about 2,392 bytes with 3 claims (2 fresh, 1 fixed; 1 fresh if the mask is stacked) for a Flock sumcheck design; a narrow algebraic-hash trace models at 176 to 248 bytes. From this step on, two opening proofs are drawn, one for R and one for C, to keep the diagram simple. The opening proof estimate is for leanVM’s hiding WHIR at its smallest size, 2²⁰ data words: about 130 to 155 KB each before standalone zero knowledge (about 300 KB for a keyed bit-claim opening).',
   'Frame 0 is EIP-8272’s recent root verifier frame. In the EIP-8288 program-scheme version of this transfer (this site’s main animation), a dependency frame (mode 3 in that draft; mode 4 in current upstream EIP-8288) required a proof for (data_hash, program_id) and came after the pool’s `VERIFY` frame. Under `PCS_open` there is no dependency frame: the claims come from the pool’s `VERIFY` frame itself. Estimates: EIP-8288 prices a dependency frame at 30,000 gas (plus a 30,000 `recursive_stark_gas` header share in upstream). Here the pool pays for its PIOP check (about 12,000 to 20,000 gas for the narrow traces the design models, up to about 69,000 gas for a Keccak withdrawal) plus about 20,000 gas per claim (about 108,000 to 128,000 gas in total for a Keccak withdrawal at drafted prices, or 69,000 to 89,000 if fixed claims are free), and the transaction carries a few hundred bytes of proof instead of a 96-byte dependency entry. In return each dApp keeps its own circuit and PIOP, and Ethereum fixes only the commitment layer.',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
   'The pool’s `VERIFY` code runs in the EVM of every node that handles the transaction: mempool nodes when they admit it, the builder, and every validator when it executes the block. As with EIP-8288 as written, the code checks the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the `SENDER` frame’s gas limits. The fixed tables (in PLONK terms, the selector and wiring polynomials) are the same for every proof, so they are committed once, without hiding, before the pool is deployed, and C is written into its code; evaluating them at z would take work in proportion to their size. `MUL_FIELD` multiplies two elements of E, 24 bytes each. Whether it is an opcode or a precompile is open; an opcode is assumed here.',
-  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 20), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
+  'In this design, `PCS_open` succeeds only in an EIP-8141 `VERIFY` frame of the validation prefix. Claims are journaled like `APPROVE` (EIP-8141 PR 12458), so a claim made in a reverted call is discarded, and a failed `PCS_open` call in the prefix invalidates the transaction. Here `ver` is the PCS version (which the contract reads from the proof, as shown in step 16), `π` denotes the on-chain PIOP proof and `v`, `c` the claimed values. A fixed commitment such as C lives in the contract’s code: it cannot change between mempool validation and inclusion, reading it costs a few gas instead of a 2,100-gas storage read, and the protocol’s set of equivalents carries it to new versions. Each claim is priced at about 20,000 gas (an estimate).',
   'Each opening proof’s Fiat–Shamir transcript starts from the whole claim (root, size, kind, points, values), so it proves that claim and no other (up to the short list a version 1 root binds to). The pool’s transcript derives z from the statement, which includes the signature hash, and from the proof bytes before it, so a claim made for one transaction is useless for another; the opening proof itself needs no binding, since reusing it for an identical claim only proves a true statement again. The claims are fully determined by the transaction and the pool’s code, which is why the wallet can prove them before sending and every node derives the same ones. The two transcripts, the pool’s with Keccak and the opening proof’s, are separate; a proof that they are secure together is still open.',
   'The wrapper carries the transaction, with π in its signature field, and one opening proof per claim. The claims are never sent or written to the block: every node derives them by running the `VERIFY` frames. Nodes must run validation before they can check opening proofs, since the claims come from it; EIP-8288 nodes can check a proof without running any frame. An opening proof that fails condemns only itself and the peer that sent it, not the transaction.',
   '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node merges every second or only specialized nodes do is an open networking question). The recursive STARK proves that every collected opening proof verifies against its claim.',
@@ -595,7 +596,7 @@ const beat = (ch, dur, fn) => { const t0 = T; fn(t0); T += dur; BEATS.push({ch, 
 
 /* 0. Title */
 const title = Txt(800, 360, 'A private transfer with <c>PCS_open</c>', {size: 62, anchor: 'middle'});
-const sub1 = Txt(800, 444, 'wallet   ·   pool   ·   mempool   ·   block   ·   upgrade without changing any contract', {size: 30, anchor: 'middle', fill: C.dim});
+const sub1 = Txt(800, 444, 'wallet   ·   pool   ·   mempool   ·   block   ·   upgrade the PCS without changing any contract', {size: 30, anchor: 'middle', fill: C.dim});
 const sub2 = Txt(800, 504, 'simple version  ·  candidate design under discussion  ·  sizes and prices are model estimates', {size: 22, anchor: 'middle', fill: C.dim});
 beat(0, 15.5, (t) => {
   A.write(title, t + 0.2, 1.8);
@@ -632,7 +633,7 @@ const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>
 const stm = Card(1040, 160, 450, 400, C.blue);
 const stmT = CT(stm, 24, 50, 'statement', {size: 32, fill: C.blue});
 const stmTag = CT(stm, 426, 48, 'public', {size: 21, fill: C.dim, anchor: 'end'});
-const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'a hash of this transaction: the proof fits it alone']];
+const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'this transaction’s hash, minus π: π fits it alone']];
 const stmRows = STM.map(([a, b, g], i) => [Row(stm, 106 + 56 * i, a, b, 200, {size: 23, lx: 24}), CT(stm, 24, 130 + 56 * i, g, {size: 17, fill: C.dim})]);
 /* What the proof establishes, between the private and the public side. */
 const shows = Txt(800, 214, 'the proof shows', {size: 26, anchor: 'middle'});
@@ -784,13 +785,13 @@ const vChip = MChip(ZX, 410, '<m>f</m>(<m>z</m>) = <m>v</m>', C.yellow, {w: 168,
 const zFly = Token(2110, 363, '<m>z</m>', C.yellow, {r: 34});
 const eqZ = Txt(1990, 500, '<k=green><m>P</m>(<m>f</m>)(<m>z</m>) = <m>Z</m>(<m>z</m>) · <m>q</m>(<m>z</m>)</k>', {size: 33, anchor: 'middle'});
 const eqZok = Check(2190, 488, C.green, {k: 1.3});
-const piC = Card(1870, 552, 270, 206, C.yellow);
+const piC = Card(1870, 552, 330, 206, C.yellow);
 const piT = CT(piC, 22, 44, 'proof <m>π</m>', {size: 28, fill: C.yellow});
 const piR = MC(piC, 50, 94, '<m>R</m>', C.yellow, {w: 54, size: 26});
-const piRb = CT(piC, 90, 102, 'her data, sealed: 32 B', {size: 18, fill: C.dim});
+const piRb = CT(piC, 90, 102, 'commitment to her data, 32 B', {size: 17, fill: C.dim});
 const piV = MC(piC, 50, 142, '<m>v</m>', C.yellow, {w: 54, size: 26});
-const piVb = CT(piC, 90, 150, 'a few values of it', {size: 18, fill: C.dim});
-const piBl = CT(piC, 22, 194, 'blinded: they reveal nothing', {size: 18, fill: C.dim});
+const piVb = CT(piC, 90, 150, 'its values at a random point <m>z</m>', {size: 17, fill: C.dim});
+const piBl = CT(piC, 22, 194, 'public, so the PIOP must blind them', {size: 18, fill: C.dim});
 const piSz = Txt(2005, 800, 'a few hundred bytes (est.)', {size: 24, anchor: 'middle'});
 
 /* 7. Prove: what an opening proof sends, against the codeword under R */
@@ -825,20 +826,21 @@ const oAll = [oR, oE, oN, oCw, oLb, oQ, oP, oLa, oAr, oF, oFq, oLc, oFin, oLd, o
 
 /* Simple version: the circuit's output is shown as two parts, π and the opening proofs, without the trace, polynomial and commitment steps. */
 const spA1 = Arrow(784, 566, 712, 584, C.yellow, {sw: 2.5, head: 11}), spA2 = Arrow(820, 560, 1052, 600, C.purple, {sw: 2.5, head: 11});
-const spPile = Pile(1120, 660, 5, {w: 90, h: 120, ox: 6, oy: -6, sw: 2, lines: 4});
-const spOL = [Txt(1120, 760, 'opening proofs', {size: 26, fill: C.purple, anchor: 'middle'}), Txt(1120, 794, 'about 150 KB each', {size: 21, fill: C.dim, anchor: 'middle'}), Txt(1120, 824, 'vouch for the values in <m>π</m>', {size: 21, fill: C.dim, anchor: 'middle'})];
-const spPL = Txt(640, 830, 'a few hundred bytes', {size: 21, fill: C.dim, anchor: 'middle'});
+const spPile = [Pile(1075, 660, 3, {w: 76, h: 100, ox: 6, oy: -6, sw: 2, lines: 4}), Pile(1175, 660, 3, {w: 76, h: 100, ox: 6, oy: -6, sw: 2, lines: 4})];
+const spOL = [Txt(1125, 760, 'opening proofs', {size: 26, fill: C.purple, anchor: 'middle'}), Txt(1125, 794, 'about 150 KB each, one per claim', {size: 21, fill: C.dim, anchor: 'middle'}), Txt(1125, 824, 'they show π’s values are genuine', {size: 21, fill: C.dim, anchor: 'middle'})];
+const spPL = Txt(640, 830, '≈0.2–2 KB', {size: 21, fill: C.dim, anchor: 'middle'});
+const spWal = Txt(800, 880, 'all of this happens in Alice’s wallet, off chain', {size: 21, fill: C.dim, anchor: 'middle'});
 beat(1, 18, (t) => {
   A.fadeOut([eth, ethT, aConv, lConv, aHide, xHide, lHide, device, devLbl, shows, showRows], t, 0.6);
   A.draw(cir, t + 0.5, 1.0); A.write(cirT, t + 0.9, 0.7); A.fadeIn(cirSub, t + 1.2, 0.5);
   A.draw([aW, aS], t + 1.6, 0.6, {lag: 0.15});
   A.flash(fW, t + 2.3, 0.7); A.flash(fS, t + 2.35, 0.7);
-  A.pulse(cir, t + 2.9, 0.7, 1.06);
+  A.pulse(cir, t + 2.9, 0.7, 1.06); A.fadeIn(spWal, t + 2.9, 0.5);
   A.draw(aT, t + 3.3, 0.5);
   A.to(piC, t, 0.01, {x: 640, y: 692}, {e: lin});
   A.draw(spA1, t + 4.0, 0.5); A.draw(piC, t + 4.4, 0.8); A.write(piT, t + 4.8, 0.6);
   A.fadeIn([piR, piRb], t + 5.6, 0.4, {lag: 0.2}); A.fadeIn([piV, piVb], t + 6.4, 0.4, {lag: 0.2}); A.fadeIn(piBl, t + 7.2, 0.5); A.fadeIn(spPL, t + 7.8, 0.5);
-  A.draw(spA2, t + 9.2, 0.5); A.fadeIn(spPile, t + 9.6, 0.01); A.fadeIn(spPile.pages, t + 9.6, 0.2, {lag: 0.07, dy: 10});
+  A.draw(spA2, t + 9.2, 0.5); spPile.forEach((p, i) => { A.fadeIn(p, t + 9.6 + i * 0.4, 0.01); A.fadeIn(p.pages, t + 9.6 + i * 0.4, 0.2, {lag: 0.07, dy: 10}); });
   A.fadeIn(spOL, t + 10.6, 0.5, {lag: 0.5});
 });
 /* 7b. Prove: the size of an opening proof, and the STARK split */
@@ -847,12 +849,12 @@ const pileTop = Txt(3700, 112, 'opening proof', {size: 32, anchor: 'middle', fil
 const pileKB = Txt(3690, 718, '≈ 150 KB each (est.)', {size: 36, anchor: 'middle', fill: C.purple});
 const pileN2 = Txt(3690, 770, 'too big for a transaction', {size: 22, anchor: 'middle', fill: C.dim});
 const stSplit = Card(2480, 640, 820, 200, C.grey, {fo: 0.06, sw: 2});
-const stSplitT = CT(stSplit, 410, 40, 'her proof  =  <k=yellow><m>π</m></k>  +  <k=purple>opening proofs</k>', {size: 24, anchor: 'middle'});
+const stSplitT = CT(stSplit, 410, 40, 'her proof (a STARK)  =  <k=yellow><m>π</m></k>  +  <k=purple>opening proofs</k>', {size: 24, anchor: 'middle'});
 const stSplitP = CT(stSplit, 24, 94, '<k=yellow><m>π</m></k>  ·  small, specific to each app  ·  checked by the pool’s code (the PIOP), in the EVM', {size: 20});
-const stSplitO = CT(stSplit, 24, 148, '<k=purple>opening proofs</k>  ·  ~95% of a STARK’s cost (est.)  ·  the same for every app', {size: 20});
+const stSplitO = CT(stSplit, 24, 148, '<k=purple>opening proofs</k>  ·  the PCS: ≈95% of a STARK’s cost (est.)  ·  the same for every app', {size: 20});
 const stSplitO2 = CT(stSplit, 24, 178, 'checked natively, outside the EVM  ·  merged once per block', {size: 18, fill: C.dim});
 /* One opening proof per commitment: her trace's R and the circuit's C. */
-const opHead = Txt(2870, 196, 'her wallet makes one opening proof per commitment', {size: 24, fill: C.purple});
+const opHead = Txt(2870, 196, 'one opening proof per claim, here one per commitment', {size: 24, fill: C.purple});
 const OPY = [264, 346];
 const opPile = OPY.map((y) => Pile(2896, y, 4, {w: 30, h: 40, ox: 4, oy: -4, sw: 1.8, lines: 3}));
 const opChip = [MChip(2964, OPY[0], '<m>R</m>', C.yellow, {w: 50, size: 26}), MChip(2964, OPY[1], '<m>C</m>', C.green, {w: 50, size: 26})];
@@ -861,7 +863,7 @@ const opSub = Txt(3006, OPY[1] + 38, 'its commitment, kept in the pool’s code'
 const opFoot = Txt(2870, 450, 'they travel beside the transaction, not in it', {size: 20, fill: C.dim});
 const OPS = [opHead, opPile, opChip, opTxt, opSub, opFoot];
 beat(1, 21, (t) => {
-  A.fadeOut([intent, intent2, wit, stm, cir, aW, aS, aT, spA1, spA2, spPile, spOL, spPL], t, 0.6);
+  A.fadeOut([intent, intent2, wit, stm, cir, aW, aS, aT, spA1, spA2, ...spPile, spOL, spPL, spWal], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 3200, cy: 450});
   A.to(piC, t + 0.2, 2.4, {x: 2690, y: 420});
   A.fadeIn(pile, t + 0.8, 0.01); A.fadeIn(pile.pages, t + 0.8, 0.2, {lag: 0.07, dy: 14});
@@ -903,7 +905,7 @@ const fMode = [['VERIFY', C.green], ['VERIFY', C.green], ['SENDER', C.blue]].map
 const fTgt = ['target: recent root contract', 'target: <k=teal>pool</k>', 'target: <k=teal>pool</k>'].map((s, i) => CT(tx, 226, FY[i] + 38, s, {size: 22}));
 const fSub = ['root is recent', 'approve?', 'add the new notes'].map((s, i) => CT(tx, 226, FY[i] + 70, s, {size: 20, fill: C.dim}));
 const fRtag = CT(tx, 690, FY[0] + 38, 'EIP-8272', {size: 18, fill: C.dim, anchor: 'end'});
-const fPi = Token(...W(640, FY[1] + 44), '<m>π</m>', C.yellow, {r: 24});
+const fPi = Token(...W(272, 207), '<m>π</m>', C.yellow, {r: 24}); fPi.base.s = 0.75;
 const piTok = Token(2600, 380, '<m>π</m>', C.yellow, {r: 24});
 /* EIP-8288 as written: its fourth frame, shown as a grey ghost beside frames 1 and 2 for comparison (a parallel version, not replaced). */
 const GH = {x: 5100, y: 550, w: 470, h: 92}, GY = GH.y + GH.h / 2;
@@ -912,9 +914,9 @@ shape(ghost, rr(-GH.w / 2, -GH.h / 2, GH.w, GH.h, 12), {stroke: C.grey, sw: 2.2,
 rich(ghost.inner, -GH.w / 2 + 22, -7, 'EIP-8288 as written: a fourth frame', {size: 22, fill: C.dim});
 rich(ghost.inner, -GH.w / 2 + 22, 26, 'asks nodes for a proof of the whole program', {size: 20, fill: C.ink});
 const ghostLead = Line(TX.x + TX.w + 8, GY, GH.x - 8, GY, C.faint, {sw: 2, dash: '6 6'});
-const ghostThis = Txt(5100, 524, 'this version: the pool keeps its own circuit and PIOP', {size: 20, fill: C.teal});
+const ghostThis = Txt(5100, 676, 'here: no fourth frame; the pool checks its own PIOP', {size: 20, fill: C.teal});
 const ghostG1 = Txt(4930, 752, 'both versions use EIP-8288: proofs checked outside the EVM, merged into one STARK per block', {size: 20, fill: C.dim, anchor: 'middle'});
-const ghostG2 = Txt(4930, 784, 'gas per transfer (est.): this version about 2–4× the program-proof version, at drafted prices', {size: 20, fill: C.dim, anchor: 'middle'});
+const ghostG2 = Txt(4930, 784, 'gas, Keccak pool (est.): about 2–4× the program-proof version, the price of keeping its own circuit and PIOP', {size: 20, fill: C.dim, anchor: 'middle'});
 beat(2, 21, (t) => {
   A.fadeOut([pileTop, pileKB, pileN2, pile, stSplit, OPS], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 4930, cy: 450});
@@ -942,7 +944,6 @@ beat(2, 13.5, (t) => {
   circum(...W(14, 98), 692, 36, C.teal, t + 0.4, {hold: 1.8}); A.fadeIn(hSenderV, t + 0.8, 0.5);
   circum(...W(14, 144), 692, 36, C.blue, t + 3.4, {hold: 2.4}); A.fadeIn(hNonceV, t + 3.8, 0.5); A.fadeIn(hNonceTag, t + 4.4, 0.5);
   A.fadeIn(nAnn, t + 5.8, 0.6, {dx: -10});
-  A.to(fPi, t + 8.6, 1.3, {x: W(272, 0)[0], y: W(0, 207)[1], s: 0.75});
   circum(...W(14, 190), 692, 36, C.yellow, t + 9.6, {hold: 1.8});
   A.fadeIn(sAnn, t + 10.8, 0.6, {dx: -10}); A.pulse(fPi, t + 11.8, 0.8, 1.25);
 });
@@ -969,13 +970,13 @@ const pChk = CHK.map(([s, lx]) => CT(pool, lx, 312, s, {size: 22}));
 const pChkM = CHK.map(([, lx]) => Check(...at(pool, lx - 20, 305), C.green, {parent: pool, k: 0.75}));
 const pOwn = CT(pool, 56, 364, 'its own verifier', {size: 20, fill: C.dim});
 const CY = [406, 462, 616, 672, 728];
-const CODE = ['recompute the random point', 'check the proof’s equation', 'PCS_open: claim about R', 'PCS_open: claim about C'];
+const CODE = ['z ← keccak(statement, R)', 'check the equation at z', 'PCS_open(ver, R, z, v)', 'PCS_open(ver, C, z, c)'];
 const pLines = CODE.map((s, i) => CT(pool, 56, CY[i], `<c>${s}</c>`, {size: 24}));
 const pApp = CT(pool, 56, CY[4], '<c>APPROVE</c>', {size: 24, fill: C.green});
 const appOk = Check(...at(pool, 196, CY[4] - 8), C.green, {parent: pool, k: 0.9});
 const pAppS = CT(pool, 240, CY[4], 'safe: the transfer counts only in a valid block', {size: 18, fill: C.dim});
 const mulF = [150, 300, 450].map((lx) => CChip(pool, lx, 512, 'MUL_FIELD', C.ink, {size: 18}));
-const mulS = CT(pool, 56, 558, '<c>MUL_FIELD</c>: cheap multiplication in the binary field that <m>π</m>’s values live in', {size: 18, fill: C.dim});
+const mulS = CT(pool, 56, 558, '<c>MUL_FIELD</c>: cheap multiplication in the binary field where <m>z</m> and the values live', {size: 18, fill: C.dim});
 const hiBar = new M(...at(pool, 380, CY[0] - 8), pool, 0);
 shape(hiBar, rr(-344, -24, 688, 46, 8), {fill: C.yellow, fo: 0.13});
 const hiY = (i) => at(pool, 0, CY[i] - 8)[1];
@@ -997,11 +998,13 @@ beat(2, 23, (t) => {
   A.fadeIn(pOwn, t + 8.4, 0.5);
   A.fadeIn([pLines[0], pLines[1]], t + 8.8, 0.4, {lag: 0.25, dx: -10});
   A.fadeIn(hiBar, t + 9.6, 0.4);
-  A.to(fPi, t + 9.6, 0.8, {x: PW(420, 0)[0], y: PW(0, CY[0] - 8)[1]}); A.fadeOut(fPi, t + 10.4, 0.3);
+  A.to(fPi, t + 12.4, 0.8, {x: PW(560, 0)[0], y: PW(0, CY[1] - 8)[1]});
   A.fadeIn(zSmall, t + 10.5, 0.4, {s0: 0.4}); A.pulse(zSmall, t + 11.0, 0.6, 1.25);
   A.to(hiBar, t + 12.4, 0.5, {y: hiY(1)});
   A.fadeIn(mulF, t + 13.0, 0.4, {lag: 0.2, s0: 0.6}); A.pulse(mulF, t + 14.0, 0.6, 1.12); A.fadeIn(mulS, t + 14.2, 0.5);
   circumC(...PW(300, 148), 54, 40, C.green, t + 15.4, {hold: 2.0}); A.pulse(pC, t + 15.8, 0.7, 1.25);
+  A.fadeIn(fxG, t + 16.0, 0.5, {lag: 1.4, dx: -8});
+  A.fadeIn(pc, t + 18.2, 0.4, {s0: 0.5}); A.pulse(pc, t + 18.6, 0.7, 1.25); A.fadeIn(pcL, t + 18.6, 0.5);
 });
 
 /* 11. Transaction: claims through PCS_open */
@@ -1009,16 +1012,16 @@ const CLY = 520; // top of the claims card, so its chips line up with the PCS_op
 const clm = Card(6720, CLY, 480, 250, C.blueL);
 const clmT = CT(clm, 24, 50, 'claims', {size: 30, fill: C.blueL});
 const clmS = CT(clm, 456, 48, 'recorded, not checked', {size: 20, fill: C.dim, anchor: 'end'});
-const clmD = CT(clm, 24, 84, 'a claim: this value of the data committed in <m>R</m> is right', {size: 18, fill: C.dim});
+const clmD = CT(clm, 24, 84, 'a claim: the polynomial behind <m>R</m> has value <m>v</m> at <m>z</m>', {size: 18, fill: C.dim});
 const clmW = CT(clm, 240, 290, 'held by each node that runs the transaction  ·  never written to the block', {size: 18, fill: C.dim, anchor: 'middle'});
-const CL = [['value of <m>R</m> is right', PL.y + CY[2] - 8 - CLY], ['value of <m>C</m> is right', PL.y + CY[3] - 8 - CLY + 8]];
+const CL = [['<m>R</m> at <m>z</m> = <m>v</m>', PL.y + CY[2] - 8 - CLY], ['<m>C</m> at <m>z</m> = <m>c</m>', PL.y + CY[3] - 8 - CLY + 8]];
 const cl = CL.map(([s, ly]) => MC(clm, 240, ly, s, C.blueL, {w: 250, size: 28}));
 const cf = CL.map(([s], i) => MChip(PW(560, 0)[0], PW(0, CY[2 + i] - 8)[1], s, C.blueL, {w: 250, size: 28}));
 const big1 = Txt(6960, 364, '<c>PCS_open</c> records a claim.', {size: 30, anchor: 'middle'});
 const big2 = Txt(6960, 412, 'It does not check it.', {size: 30, anchor: 'middle'});
 const big3 = Txt(6960, 464, 'Nodes do, natively: no valid block holds a false claim.', {size: 22, fill: C.green, anchor: 'middle'});
 beat(2, 18.5, (t) => {
-  A.fadeOut(fxG, t, 0.5);
+  A.fadeOut([fxG, fPi], t, 0.5);
   A.cam(t + 0.2, 2.0, {cx: 6540, cy: 450});
   A.fadeOut(hiBar, t + 0.4, 0.3); A.to(hiBar, t + 0.8, 0.01, {y: hiY(2)}, {e: lin});
   A.fadeIn([pLines[2], pLines[3]], t + 1.6, 0.4, {lag: 0.3, dx: -10});
@@ -1040,7 +1043,7 @@ const LW = {x: 7330, y: 120, w: 760, h: 730};
 const lwal = new M(LW.x + LW.w / 2, LW.y + LW.h / 2, null, 0);
 shape(lwal, rr(-LW.w / 2, -LW.h / 2, LW.w, LW.h, 20), {stroke: C.grey, sw: 2, dash: '10 8', fill: C.grey, fo: 0.03});
 const lwalT = Txt(LW.x + 30, LW.y + 48, 'Alice’s wallet, before sending', {size: 24, fill: C.dim});
-const lwalS = Txt(LW.x + 30, LW.y + 96, 'same random point, same values', {size: 24});
+const lwalS = Txt(LW.x + 30, LW.y + 96, 'same <m>z</m> = hash(statement, <m>R</m>) and same values', {size: 24});
 const lwalB = [Txt(LW.x + 30, LW.y + 134, 'the statement includes the signature hash,', {size: 20, fill: C.dim}),
                Txt(LW.x + 30, LW.y + 160, 'so these claims fit no other transaction', {size: 20, fill: C.dim})];
 const LKY = [648, 712];
@@ -1050,10 +1053,10 @@ const lkPer = Txt(LW.x + 30, 590, 'one opening proof for each claim', {size: 22,
 const lkLine = LKY.map((y) => Line(7094, y, LW.x + 40, y, C.blueL, {dash: '8 7', sw: 2.5}));
 const lkSame = Txt(7265, 618, 'same claim', {size: 22, fill: C.blueL, anchor: 'middle'});
 const lkBadP = Pile(LW.x + 70, 330, 4, {w: 34, h: 44, ox: 4, oy: -4, sw: 1.8, lines: 3});
-const lkBad = MChip(LW.x + 250, 330, 'another value of <m>R</m>', C.purple, {w: 250, size: 28, tc: C.ink});
+const lkBad = MChip(LW.x + 250, 330, '<m>R</m> at <m>w</m> = <m>u</m>', C.purple, {w: 250, size: 28, tc: C.ink});
 const lkBadX = Cross(LW.x + 420, 330, C.red, {k: 1.1});
-const lkBadL = Txt(LW.x + 30, 392, 'a proof for any other claim fails', {size: 22, fill: C.dim});
-const lkCmp = [Txt(6960, 440, 'that the two checks are secure together', {size: 20, fill: C.dim, anchor: 'middle'}), Txt(6960, 468, 'is not yet proven', {size: 20, fill: C.dim, anchor: 'middle'})];
+const lkBadL = Txt(LW.x + 30, 392, 'a proof for any other root, point or value fails', {size: 22, fill: C.dim});
+const lkCmp = [Txt(6960, 440, 'not yet proven: that the pool’s check and the', {size: 20, fill: C.dim, anchor: 'middle'}), Txt(6960, 468, 'opening proofs’ checks are secure together', {size: 20, fill: C.dim, anchor: 'middle'})];
 const LINK = [lwal, lwalT, lwalS, ...lwalB, ...lkPile, ...lkStamp, lkPer, ...lkLine, lkSame, lkBadP, lkBad, lkBadX, lkBadL, ...lkCmp];
 beat(2, 17, (t) => {
   A.fadeOut([big1, big2, big3, pool], t, 0.5);
@@ -1109,12 +1112,12 @@ for (const k in NP_) N[k] = Node(NP_[k][0], NP_[k][1], {col: C.grey});
 const EDGES = ['AB', 'AC', 'AD', 'BD', 'CD', 'BE', 'CF', 'DE', 'DF', 'EG', 'FG', 'DG'].map((s) => Edge(N[s[0]], N[s[1]]));
 const mpLbl = Txt(8415, 96, 'mempool nodes', {size: 26, anchor: 'middle', fill: C.dim});
 const aliceW = MiniWrap(7604, 466); aliceW.base.s = 1.08;
-const nPanel = Card(7920, 290, 530, 396, C.ink, {fill: C.stage, fo: 0.95, sw: 2});
+const nPanel = Card(7920, 290, 530, 396, C.ink, {fill: C.stage, fo: 1, sw: 2});
 const npT = CT(nPanel, 20, 32, 'inside a mempool node', {size: 16, fill: C.dim});
 const np1 = CT(nPanel, 22, 72, '1.  nonce keys unused', {size: 19});
 const np1k = Check(...at(nPanel, 498, 66), C.green, {parent: nPanel, k: 0.8});
 const np2 = CT(nPanel, 22, 112, '2.  run frames 0 and 1 in the EVM  →  the claims (not sent)', {size: 18.5});
-const np3 = CT(nPanel, 22, 152, '3.  verify each opening proof natively against its claim', {size: 18.5});
+const np3 = CT(nPanel, 22, 152, '3.  check the opening proofs (or a peer’s STARK) natively', {size: 17.5});
 const NPY = [204, 258];
 const npC = NPY.map((ly, i) => MC(nPanel, 116, ly, i ? '<m>C</m> at <m>z</m> = <m>c</m>' : '<m>R</m> at <m>z</m> = <m>v</m>', C.blueL, {w: 170, size: 18}));
 const npL = NPY.map((ly) => CLine(nPanel, 206, ly, 290, ly, C.faint));
@@ -1157,7 +1160,7 @@ for (const k in NP_) nodeB[k] = Badge(...BAt(k), {k: 0.86});
 const nodePiles = Object.keys(NP_).flatMap((k) => [[-50, -36], [-56, 34], [6, 58]].map(([dx, dy]) => {
   const m = Pile(NP_[k][0] + dx, NP_[k][1] + dy, 4, {w: 22, h: 30, ox: 4, oy: -4, sw: 1.8, lines: 3}); m.k = k; return m;
 }));
-const every = Txt(8415, 138, 'every second, nodes merge their opening proofs into one STARK', {size: 22, fill: C.dim, anchor: 'middle'});
+const every = Txt(8415, 138, 'every second, nodes merge their opening proofs into one STARK and forward it with the transactions', {size: 22, fill: C.dim, anchor: 'middle'});
 beat(3, 10.5, (t) => {
   A.fadeOut(nPanel, t, 0.6);
   A.cam(t, 2.0, {cx: 8415, cy: 450, z: 1}); A.to(dimmed, t + 0.4, 1.0, {o: 1});
@@ -1267,17 +1270,17 @@ const LY = [1100, 1295, 1490];
 const lay = [[C.teal, 'PIOP', 'the pool’s frozen contract code, run in every node’s EVM', C.teal], [C.purple, 'PCS', 'checked natively by nodes and merged recursively', C.purple], [C.grey, 'binary field', '64-bit data, 192-bit points and values, multiplied with <c>MUL_FIELD</c>', C.ink]]
   .map(([c, a, b, lc], i) => { const m = Card(11400, LY[i], 1200, 142, c, {fo: 0.06}); m.a = CT(m, 44, 88, a, {size: 42, fill: lc}); m.b = CT(m, 340, 72, b, {size: [28, 26, 24][i]});
     // The board's cost split: the PCS is most of a STARK verifier's work, so only the PIOP stays with the contract.
-    m.c = [CT(m, 340, 114, 'the small part of a STARK · ~12–20K gas in the EVM (est., before claims)', {size: 21, fill: C.dim}),
-           CT(m, 340, 114, '~95% of a STARK’s cost (est.) · ~20K gas per claim (est.) · one STARK per block', {size: 19, fill: C.dim}), null][i];
+    m.c = [CT(m, 340, 114, 'the small part of a STARK · ≈12–20K gas in the EVM, plus ≈20K per claim (est.)', {size: 21, fill: C.dim}),
+           CT(m, 340, 114, '≈95% of a STARK’s cost (est.) · one STARK per block', {size: 19, fill: C.dim}), null][i];
     return m; });
 const upTag = CChip(lay[1], 1090, 68, 'upgradable', C.purple, {size: 20});
 const fixTag = CChip(lay[2], 1090, 68, 'fixed', C.ink, {size: 20});
 const layArrow = Arrow(12480, 1248, 12480, 1290, C.blueL, {sw: 3});
 const layArrowL = Txt(12500, 1276, 'claims', {size: 22, fill: C.blueL});
 const lanesBar = Card(11400, 1672, 1200, 88, C.gold, {fo: 0.05, sw: 2});
-const lanesT = CT(lanesBar, 600, 36, 'the same EIP-8288 block STARK can verify four lanes of claims, each about a 32-byte commitment:', {size: 21, fill: C.dim, anchor: 'middle'});
-const lanesS = CT(lanesBar, 600, 68, '<k=purple>polynomials (leanPCS)</k>   ·   programs (leanVM)   ·   circuits (leanR1CS)   ·   keys (leanSPHINCS)', {size: 22, anchor: 'middle'});
-beat(5, 19, (t) => {
+const lanesT = CT(lanesBar, 600, 36, 'the same EIP-8288 block STARK could also verify other lanes of claims, once their schemes are defined:', {size: 21, fill: C.dim, anchor: 'middle'});
+const lanesS = CT(lanesBar, 600, 68, '<k=purple>polynomials (leanPCS)</k>   ·   programs (leanVM)   ·   circuits (leanR1CS)   ·   signatures (leanSPHINCS)', {size: 22, anchor: 'middle'});
+beat(4, 19, (t) => {
   A.fadeOut([blk, hdr, bdy, bcl, aHash, aHashL, vals, valsL, vChk, vChkM, pst], t, 0.6);
   A.cam(t, 2.4, {cx: 12000, cy: 1425});
   lay.forEach((m, i) => { const tt = t + 1.8 + [0, 3.2, 6.8][i]; A.draw(m, tt, 0.9); A.write(m.a, tt + 0.4, 0.7); A.fadeIn(m.b, tt + 0.9, 0.6, {dx: -10}); if (m.c) A.fadeIn(m.c, tt + 1.5, 0.6, {dx: -10}); });
@@ -1474,7 +1477,7 @@ beat(5, 15.5, (t) => {
 /* 23. Upgrade: three rules */
 const RU = [[IconPlus, C.green, '1.  Add, never replace', 'so nobody can lock others out with a commitment only they can open'],
   [IconPin, C.gold, '2.  One added commitment, one polynomial', 'so none can pass as the real circuit and later open as a fake'],
-  [IconShield, C.blueL, '3.  Move before version 1 is broken', 'if it breaks first, an unmoved <m>C</m><sub>1</sub> needs a costly one-time proof  ·  if it only weakens, nothing moves', 23]];
+  [IconShield, C.blueL, '3.  Move before version 1 is broken', 'if it breaks first, an unmoved <m>C</m><sub>1</sub> freezes  ·  if it only weakens, nothing moves', 23]];
 const rules = RU.map(([Ic, col, a, b, bs], i) => {
   const y = 1120 + 210 * i;
   const m = Card(14800, y, 1200, 170, C.ink, {fo: 0.03, sw: 2});
@@ -1498,10 +1501,10 @@ const IY = [150, 248, 312], IU = [150, 231, 312];
 const item = (card, ly, s, col, size = 27) => [Dot(...at(card, 46, ly - 8), col, {r: 5, parent: card}), CT(card, 70, ly, s, {size})];
 const fxItems = [[...item(fx, IY[0], 'the binary field:', C.ink), CT(fx, 70, IY[0] + 34, '64-bit data, 192-bit points and values', {size: 24})],
   item(fx, IY[1], '<c>MUL_FIELD</c>', C.ink), item(fx, IY[2], 'what a claim means', C.ink)];
-const upItems = [item(up, IU[0], 'the PCS and its commitments', C.purple), item(up, IU[1], 'opening proofs', C.purple), item(up, IU[2], 'how they are merged', C.purple)];
+const upItems = [item(up, IU[0], 'new PCS versions, their commitments', C.purple), item(up, IU[1], 'opening proofs', C.purple), item(up, IU[2], 'how they are merged', C.purple)];
 const appCard = Card(16440, 590, 1320, 150, C.teal, {fo: 0.04});
 appCard.t = CT(appCard, 32, 56, 'frozen in each dApp, beyond any fork', {size: 30, fill: C.teal});
-appCard.s = CT(appCard, 32, 106, 'its circuit, PIOP, Fiat–Shamir hashing and blinding  ·  their soundness and zero knowledge are the dApp’s own responsibility', {size: 22, fill: C.dim});
+appCard.s = CT(appCard, 32, 106, 'its circuit (via <m>C</m>), PIOP, transcript hashing and masking  ·  their soundness and zero knowledge are the dApp’s job', {size: 22, fill: C.dim});
 beat(5, 18, (t) => {
   A.fadeOut([pool3, sys, v1x, v2x, clc2, aRoute, aRouteL, clcOk, noChange, stamp2, rules, rules.map((m) => m.icon)], t, 0.6);
   A.cam(t, 2.4, {cx: 17100, cy: 430});
@@ -1516,14 +1519,16 @@ beat(5, 18, (t) => {
 const curtain = new M(0, 0, {inner: SVG}, 0);
 shape(curtain, 'M0,0 H1600 V900 H0 Z', {fill: '#000', fo: 1});
 /* One row per piece: where it lives, and where it runs or is checked. */
-const TC = [19700, 20000, 20580], TY0 = 150, TDY = 70;
+const TC = [19700, 20000, 20580], TY0 = 150, TDY = 56;
 const tHdr = ['what', 'where it lives', 'where it runs or is checked'].map((h, i) => Txt(TC[i], TY0, h, {size: 24, fill: C.dim}));
 const tRule = Line(TC[0], TY0 + 22, 21220, TY0 + 22, C.rule, {sw: 2});
 const TROWS2 = [
-  ['the circuit', C.ink, 'off chain: the pool’s GitHub', 'run by Alice’s wallet to make the proof'],
+  ['the circuit', C.ink, 'off chain: the pool’s GitHub; pinned by <m>C</m>', 'run by Alice’s wallet to make the proof'],
   ['the witness', C.red, 'off chain: Alice’s wallet only', 'never leaves the wallet'],
-  ['the pool contract', C.teal, 'on chain: its code checks <m>π</m> and holds <m>C</m>', 'runs in every node’s EVM'],
-  ['proof <m>π</m>', C.yellow, 'on chain: in the transaction, a few hundred bytes', 'checked by the pool’s code, in the EVM'],
+  ['the pool contract', C.teal, 'on chain: code with the PIOP verifier and <m>C</m>', 'runs in every node’s EVM'],
+  ['the pool’s state', C.teal, 'on chain: the contract’s storage (note tree)', 'updated by the transaction’s SENDER frame'],
+  ['the statement', C.blue, 'on chain: in the transaction', 'read by the pool’s code; nullifiers are nonce keys'],
+  ['proof <m>π</m>', C.yellow, 'on chain: in the transaction, ≈0.2–2 KB', 'checked by the pool’s code, in the EVM'],
   ['claims', C.blueL, 'never sent: recorded as the pool’s code runs', 'rederived by every node; hashed into the block'],
   ['opening proofs', C.purple, 'mempool only, about 150 KB each', 'checked outside the EVM, merged every second'],
   ['the block’s STARK', C.gold, 'on chain: one per block', 'checked by validators, outside the EVM'],
@@ -1542,9 +1547,9 @@ beat(6, 20, (t) => {
 });
 
 /* 26. Close: the recap stays, the caption carries the closing line, and a card lists what is still open. */
-const openCard = Card(19760, 762, 1380, 96, C.grey, {fo: 0.05, sw: 2});
+const openCard = Card(19760, 712, 1380, 96, C.grey, {fo: 0.05, sw: 2});
 openCard.t = CT(openCard, 24, 38, 'still open', {size: 22, fill: C.dim});
-openCard.s = CT(openCard, 24, 74, 'a standalone zero-knowledge opening proof  ·  a security proof of both checks together  ·  the price of a claim  ·  the upgrade mechanism  ·  which lane ships first', {size: 19});
+openCard.s = CT(openCard, 24, 74, 'a standalone zero-knowledge opening proof  ·  a security proof of both checks together  ·  the price of a claim  ·  the upgrade mechanism  ·  a PCS or an ISA?', {size: 19});
 beat(6, 9, (t) => {
   A.fadeIn([openCard, openCard.t, openCard.s], t + 1.0, 0.6);
 });
