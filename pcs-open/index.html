@@ -533,7 +533,7 @@ const CAP = [
   'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes the signature hash, a hash of this transaction.',
   'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
   'The pool’s rules are written as a circuit, a fixed list of simple arithmetic checks. Running it fills a table, the trace, with every value it computes. The wallet reads the whole table as one polynomial f, which also has a value at every other point.',
-  'A polynomial commitment scheme (PCS), WHIR today, Reed–Solomon encodes f, spreading any change over most of the codeword, and seals it in a 32-byte Merkle root R. R binds f, up to a short list a cheater could pick from (costing at most 12 bits of security), and later opening proofs show single values of f and must hide the rest.',
+  'A polynomial commitment scheme (PCS), WHIR today, stretches f into a longer codeword, so any change spreads over most of it, and seals it in a 32-byte Merkle root R. Later, opening proofs show single values of f and must hide the rest.',
   'A PIOP turns the circuit’s checks into one polynomial P(f), zero on every row of a valid trace, so P(f) = Z · q, where Z is zero on the rows and q is committed with f. A wrong trace breaks this almost everywhere, so testing one random point is enough.',
   'That point z is a hash of the statement and R (Fiat–Shamir), so Alice can’t pick a point where a wrong trace passes. The wallet sends R and the values the equation needs at z: the proof π, a few hundred bytes. These values are public, so the PIOP must blind f with randomness.',
   'π alone doesn’t show that v is f(z). As z is not a row, f(z) depends on every cell, so no single Merkle path shows it. The wallet also makes an opening proof of f(z) = v: Merkle paths from R to about 100 random spots, then smaller folded codewords. A wrong v fails at many spots.',
@@ -551,9 +551,9 @@ const CAP = [
   'The hard part is C₁, the circuit commitment made under version 1: unlike R, it is fixed in the pool’s code. Each live version is another verifier in every node and another circuit in the block’s STARK, so a fork wants to retire version 1, at once if it breaks. Then nobody could open C₁, and the pool would stop working.',
   'While version 1 still works, anyone commits the same fixed tables under version 2, giving C₂, and both are opened at a random point r, a hash of C₁ and C₂. If the values match, C₂ holds the same polynomial: as with z, two different polynomials almost never agree at a random point.',
   'A proposed system contract, which `PCS_open` consults, records that C₂ is equivalent to C₁. A claim is about the polynomial, so the wallet opens the pool’s claims on C₁ through C₂. The pool’s code never changes, and version 1 can be retired.',
-  'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. R may bind a short list, which costs little since z comes after it, but an added commitment stands for the circuit, so it must fix exactly one. And the move happens before version 1 breaks, since the check trusts its opening proofs.',
+  'Three rules keep this safe. Equivalents are only added, never replaced, so nobody can lock others out. Each added commitment stands for the circuit, so it must fix exactly one polynomial. And the move happens before version 1 breaks, since the check trusts its opening proofs.',
   'What stays fixed in the protocol is small, because contracts are written against it: the binary field, `MUL_FIELD` and what a claim means. The PCS, its opening proofs and how they are merged can be upgraded by fork. Each dApp’s PIOP is frozen with its contract, and the dApp answers for it.',
-  'Recap. The witness never leaves the wallet. The small proof π goes on chain, and every node checks it by running the pool’s code in its EVM. The opening proofs stay in the mempool until nodes merge them into the block’s one STARK, which proves the claims.',
+  'Recap: where everything lives. The circuit is in the pool’s GitHub, and the witness never leaves the wallet. On chain: the pool’s code, π in each transaction, and one STARK per block. Opening proofs stay in the mempool, and claims are never sent: every node rederives them.',
   'Nodes run each contract’s PIOP in their EVM and check the opening proofs natively, merging them recursively. A fork can upgrade the PCS, never a contract’s PIOP.',
 ];
 const NOTE = [
@@ -1587,44 +1587,30 @@ beat(5, 18, (t) => {
 /* 25. Recap: where each piece goes, and who does what */
 const curtain = new M(0, 0, {inner: SVG}, 0);
 shape(curtain, 'M0,0 H1600 V900 H0 Z', {fill: '#000', fo: 1});
-const RL = 19700, RX = [19930, 20270, 20610, 20950], RY = [236, 346, 456, 566];
-const colHdr = ['wallet', 'pool', 'mempool', 'block'].map((s, i) => Txt(RX[i], 132, s, {size: 26, fill: C.dim, anchor: 'middle'}));
-const guides = RX.map((x) => Curve(`M${x},160 L${x},606`, C.rule, {sw: 2}));
-const rowLbl = [['witness', C.red], ['proof <m>π</m>', C.yellow], ['claims', C.blueL], ['opening proofs', C.purple]].map(([s, c], i) => Txt(RL, RY[i] + 8, s, {size: 24, fill: c}));
-const rdot = (x, y, c) => Dot(x, y, c, {r: 9});
-const rseg = (x1, x2, y, c) => Curve(`M${x1},${y} L${x2},${y}`, c, {sw: 5});
-const r0 = [rdot(RX[0], RY[0], C.red), Lock(RX[0] + 40, RY[0] + 2, C.red, {k: 0.9}), Txt(RX[0] + 68, RY[0] + 8, 'never leaves the wallet', {size: 20, fill: C.dim})];
-const r1 = {seg: rseg(RX[0], RX[1], RY[1], C.yellow), dots: [rdot(RX[0], RY[1], C.yellow), rdot(RX[1], RY[1], C.yellow)],
-  ann: [Txt((RX[0] + RX[1]) / 2, RY[1] + 36, 'in the transaction, values blinded,', {size: 20, fill: C.dim, anchor: 'middle'}), Txt((RX[0] + RX[1]) / 2, RY[1] + 62, 'checked in the pool’s code', {size: 20, fill: C.dim, anchor: 'middle'})]};
-// Curve() takes no dash, so the dashed continuation is a Line that fades in.
-r1.seg2 = Line(RX[1], RY[1], RX[3], RY[1], C.yellow, {sw: 3, dash: '10 8'});
-r1.endDot = rdot(RX[3], RY[1], C.yellow);
-r1.end = Txt(RX[3] + 30, RY[1] + 8, 'on chain, in the block', {size: 20, fill: C.dim});
-const r2 = {seg: rseg(RX[1], RX[3], RY[2], C.blueL), dots: [rdot(RX[1], RY[2], C.blueL), rdot(RX[3], RY[2], C.blueL)], ann: Txt(RX[3] + 30, RY[2] + 8, 'rederived by every node', {size: 20, fill: C.dim})};
-const r3 = {
-  arc: Curve(`M${RX[0]},${RY[3]} Q${RX[1]},${RY[3] - 84} ${RX[2]},${RY[3]}`, C.purple, {sw: 5}),
-  dots: [rdot(RX[0], RY[3], C.purple), rdot(RX[2], RY[3], C.purple)],
-  seg: rseg(RX[2], RX[3] - 50, RY[3], C.gold),
-  sub: Txt((RX[2] + RX[3]) / 2 - 24, RY[3] + 36, 'merged', {size: 20, fill: C.dim, anchor: 'middle'}),
-  end: Badge(RX[3], RY[3]),
-};
-r3.zk = Txt(RX[1], RY[3] + 62, 'public in the mempool: must be zero-knowledge', {size: 20, fill: C.dim, anchor: 'middle'});
-const roleLbl = Txt(RL, 690, 'role', {size: 22, fill: C.dim});
-const roleCols = [['proves'], ['its code runs in each node’s EVM:', 'checks the PIOP, records claims'], ['verifies opening proofs natively,', 'merges them'], ['rederives claims,', 'verifies one STARK']]
-  .map((ls, i) => ls.map((s, j) => Txt(RX[i], 690 + 28 * j, s, {size: 20, anchor: 'middle'})));
-beat(6, 16, (t) => {
+/* One row per piece: where it lives, and where it runs or is checked. */
+const TC = [19700, 20000, 20580], TY0 = 150, TDY = 70;
+const tHdr = ['what', 'where it lives', 'where it runs or is checked'].map((h, i) => Txt(TC[i], TY0, h, {size: 24, fill: C.dim}));
+const tRule = Line(TC[0], TY0 + 22, 21220, TY0 + 22, C.rule, {sw: 2});
+const TROWS2 = [
+  ['the circuit', C.ink, 'off chain: the pool’s GitHub', 'run by Alice’s wallet to make the proof'],
+  ['the witness', C.red, 'off chain: Alice’s wallet only', 'never leaves the wallet'],
+  ['the pool contract', C.teal, 'on chain: its code holds the PIOP and <m>C</m>', 'runs in every node’s EVM'],
+  ['proof <m>π</m>', C.yellow, 'on chain: in the transaction, a few hundred bytes', 'checked by the pool’s code, in the EVM'],
+  ['claims', C.blueL, 'never sent: recorded as the pool’s code runs', 'rederived by every node; hashed into the block'],
+  ['opening proofs', C.purple, 'mempool only, about 150 KB each', 'checked outside the EVM, merged every second'],
+  ['the block’s STARK', C.gold, 'on chain: one per block', 'checked by validators, outside the EVM'],
+];
+const tRows = TROWS2.map(([a, col, b, c], i) => {
+  const y = TY0 + 64 + i * TDY;
+  return [Txt(TC[0], y, a, {size: 24, fill: col}), Txt(TC[1], y, b, {size: 21}), Txt(TC[2], y, c, {size: 21})];
+});
+const tLines = TROWS2.slice(1).map((_, i) => Line(TC[0], TY0 + 64 + i * TDY + 30, 21220, TY0 + 64 + i * TDY + 30, C.faint, {sw: 1}));
+beat(6, 20, (t) => {
   A.fadeIn(curtain, t, 0.7);
   A.cam(t + 0.8, 0.01, {cx: 20450, cy: 440, z: 1}, lin);
   A.fadeOut(curtain, t + 0.9, 0.6);
-  A.fadeIn(colHdr, t + 1.1, 0.6, {lag: 0.15}); A.draw(guides, t + 1.3, 0.8, {lag: 0.1});
-  A.fadeIn(rowLbl[0], t + 2.0, 0.5, {dx: -10}); A.fadeIn(r0, t + 2.4, 0.5, {lag: 0.3});
-  A.fadeIn(rowLbl[1], t + 4.2, 0.5, {dx: -10}); A.fadeIn(r1.dots[0], t + 4.6, 0.3); A.draw(r1.seg, t + 4.7, 0.7); A.fadeIn(r1.dots[1], t + 5.3, 0.3); A.fadeIn(r1.ann, t + 5.6, 0.5, {lag: 0.2});
-  A.fadeIn(r1.seg2, t + 6.2, 0.8); A.fadeIn(r1.endDot, t + 7.0, 0.3); A.fadeIn(r1.end, t + 7.1, 0.5);
-  A.fadeIn(rowLbl[2], t + 7.4, 0.5, {dx: -10}); A.fadeIn(r2.dots[0], t + 7.8, 0.3); A.draw(r2.seg, t + 7.9, 1.0); A.fadeIn(r2.dots[1], t + 8.8, 0.3); A.fadeIn(r2.ann, t + 9.1, 0.5);
-  A.fadeIn(rowLbl[3], t + 9.8, 0.5, {dx: -10}); A.fadeIn(r3.dots[0], t + 10.2, 0.3); A.draw(r3.arc, t + 10.3, 0.9); A.fadeIn(r3.dots[1], t + 11.1, 0.3);
-  A.draw(r3.seg, t + 11.4, 0.7); A.fadeIn(r3.sub, t + 11.6, 0.4); A.fadeIn(r3.end, t + 12.0, 0.4, {s0: 0.4});
-  A.fadeIn(r3.zk, t + 11.2, 0.5);
-  A.fadeIn(roleLbl, t + 13.0, 0.5); A.fadeIn(roleCols, t + 13.2, 0.5, {lag: 0.2});
+  A.fadeIn(tHdr, t + 1.1, 0.6, {lag: 0.15}); A.draw(tRule, t + 1.4, 0.6);
+  tRows.forEach((r, i) => { A.fadeIn(r, t + 2.2 + i * 1.9, 0.5, {lag: 0.25, dx: -8}); if (i) A.draw(tLines[i - 1], t + 2.0 + i * 1.9, 0.4); });
 });
 
 /* 26. Close: the recap stays, the caption carries the closing line, and a card lists what is still open. */
