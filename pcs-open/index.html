@@ -641,7 +641,7 @@ const witRows = [['spent notes', '0.9 and 0.5 ETH'], ['spending key', '<m>sk</m>
 const stm = Card(1040, 160, 450, 400, C.blue);
 const stmT = CT(stm, 24, 50, 'statement', {size: 32, fill: C.blue});
 const stmTag = CT(stm, 426, 48, 'public', {size: 21, fill: C.dim, anchor: 'end'});
-const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'this transaction’s hash, minus π: π fits it alone']];
+const STM = [['Merkle root', 'root', 'the pool’s tree of all notes'], ['nullifiers', '<m>nf</m><sub>1</sub>, <m>nf</m><sub>2</sub>', 'mark her notes spent, without saying which'], ['new notes', '<m>cm</m><sub>1</sub>, <m>cm</m><sub>2</sub>', 'sealed: amounts and owners hidden'], ['fee', '0.01 ETH', 'the only amount anyone sees'], ['transaction', 'signature hash', 'hash of this tx with π left out (length kept)']];
 const stmRows = STM.map(([a, b, g], i) => [Row(stm, 106 + 56 * i, a, b, 200, {size: 23, lx: 24}), CT(stm, 24, 130 + 56 * i, g, {size: 17, fill: C.dim})]);
 /* What the proof establishes, between the private and the public side. */
 const shows = Txt(800, 214, 'the proof shows', {size: 26, anchor: 'middle'});
