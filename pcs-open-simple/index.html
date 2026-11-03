@@ -533,9 +533,9 @@ const CAP = [
   'Alice holds two notes in the minimal shielded pool, a private dApp: 0.9 and 0.5 ETH. She pays Bob 1.2 ETH, keeps 0.19 ETH as change and pays a 0.01 ETH fee, revealing nothing but the fee.',
   'The witness never leaves her wallet: the notes she spends, the key that owns them, Merkle paths showing those notes are in the pool, and her new notes. The public statement hides every amount but the fee and includes the signature hash, a hash of this transaction without its signature bytes, where the proof will travel.',
   'The proof must convince the nodes that check the transaction that her secrets match the statement and follow the pool’s rules: her notes are in the pool, they are hers, each nullifier comes from its note, the new notes are sealed correctly, and the amounts balance.',
-  'Her wallet runs the pool’s circuit, its rules written as simple arithmetic checks, on her secrets and the statement. Out comes a post-quantum proof (a STARK) in two parts: a small proof π, a few hundred bytes to about 2 KB, and opening proofs, about 150 KB each.',
-  'R and C are seals: 32-byte fingerprints of a big table, made with a polynomial commitment scheme (PCS). R seals Alice’s work, every value her wallet computed, new for each payment and private. C seals the pool’s rules, which check runs at each step, made once, public and kept in the pool’s contract. The pool checks both at one random spot z: two seals, two claims, two opening proofs.',
-  'π carries R and the two values at z: v from Alice’s work and c from the rules. The opening proofs, one per seal, show those values are genuine. They are most of a STARK’s cost and alike for every app, so nodes check them natively and merge them per block. The pool’s code checks π itself, in the EVM: that part is the PIOP.',
+  'Her wallet runs the pool’s circuit, its rules written as simple arithmetic checks, on her secrets and the statement. Out comes a post-quantum proof (a STARK) in two parts: a small proof π, holding a seal R of her work and a few values at one random spot z (both explained next), and opening proofs, about 150 KB each.',
+  'R and C are seals: 32-byte fingerprints (Merkle roots) of a big table, made with a polynomial commitment scheme (PCS, WHIR today). R seals Alice’s work, every value her wallet computed: new each payment and private. C seals the pool’s rules, which check runs on each row: made once, public, and kept in the pool’s contract, so Alice can’t bring her own rules. A wrong table breaks the rules at almost every spot, so the pool checks both at one random spot z.',
+  'π carries R and the values at z: v from Alice’s work and c from the rules. Alice could make numbers up, so each seal also gets an opening proof: about 100 random pieces of the sealed table, each with its hash path to the seal, which fit the claimed value only if it is genuine. These are most of a STARK’s cost, so nodes check them natively and merge them per block. The pool’s code checks π itself, in the EVM: that part is the PIOP.',
   'Her frame transaction (EIP-8141) has three frames: the first checks her Merkle root is recent (EIP-8272), the pool’s `VERIFY` frame approves it and pays the fee, and the `SENDER` frame adds the new notes. EIP-8288 as written adds a fourth frame asking nodes to check a proof of the pool’s whole program; here the pool keeps its own circuit and PIOP.',
   'The pool is the sender, so Alice needs no public account. Her nullifiers are the transaction’s nonce keys (EIP-8250), each usable once, so no note is spent twice. π travels in the transaction’s signature field, where a signature would go, and authorizes this exact transaction.',
   'In its `VERIFY` frame, the pool’s code reads π from the transaction’s signature field and does its usual checks. Then it recomputes z as a hash of the statement (with its signature hash) and R, and checks π’s equation at z with `MUL_FIELD`, a new binary-field multiplication. The equation also needs the rules’ value at z, too big to compute in the EVM, so the code keeps only their seal C, and π carries the value c.',
@@ -560,7 +560,7 @@ const NOTE = [
   'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The signature hash covers the whole transaction except the bytes of π’s signature entry, which it replaces by their length, so the statement can include it without depending on π. Hashes are Keccak-256.',
   'In proof-system terms the statement is the public input, the witness the private input, and the pool’s rules the relation between them. A nullifier is a hash of the note and her key: the same note always gives the same nullifier, so a second spend is caught, yet no one else can tell which note it belongs to. Zero knowledge means the proof reveals nothing about the witness beyond the fact that a valid one exists.',
   'Under the hood (the detailed version walks through each step): running the circuit fills a table, the trace, read as one polynomial f and committed with a polynomial commitment scheme (PCS, WHIR today) into a 32-byte Merkle root R. π holds R and the values of f (and of the circuit’s fixed tables) at one random point z, a hash of the statement and R (Fiat–Shamir), where a wrong trace would fail the PIOP’s equation. Each opening proof, one per claim, shows that the claimed values really are the committed polynomial’s values at z, with Merkle paths to about 100 random spots of its encoding. The values in π are public, so the pool’s PIOP must blind them, which is the dApp’s responsibility. Here π names the small proof the pool checks; on the design page, π in `pOpen(v, C, x, y, π)` names the opening proof instead.',
-  'The PCS (WHIR today) reads each table as a polynomial and commits to it with a Merkle root. R is blinded, so its values reveal nothing about Alice’s secrets. C is committed once without hiding, so anyone can recompute it from the published circuit and check that it matches the contract. The random spot z is a hash of the statement and R, so Alice cannot choose it.',
+  'The PCS reads each table as a polynomial, a curve through all its values, and commits to it with a Merkle root over a stretched encoding. A wrong trace makes the circuit’s equation fail at all but a few points, about one in 10³² for a random z, which is why one spot is enough. R is blinded, so its values reveal nothing about Alice’s secrets. C is committed once without hiding, so anyone can recompute it from the published circuit and check that it matches the contract. Two seals are needed because the rules must come from the pool, not from Alice, and computing the rules’ value at z in the EVM would mean reading the whole table. C is public, so anyone can open it, and one opening per block can serve every claim on it. The random spot z is a hash of the statement and R, so Alice cannot choose it.',
   'Model estimates for a Keccak withdrawal over GF(2¹⁹²) in a gas model: about 408 bytes of proof with 5 claims (3 fresh, 2 fixed) for a univariate PLONK design, or about 2,392 bytes with 3 claims (2 fresh, 1 fixed; 1 fresh if the mask is stacked) for a Flock sumcheck design; a narrow algebraic-hash trace models at 176 to 248 bytes. From this step on, two opening proofs are drawn, one for R and one for C, to keep the diagram simple. The opening proof estimate is for leanVM’s hiding WHIR at its smallest size, 2²⁰ data words: about 130 to 155 KB each before standalone zero knowledge (about 300 KB for a keyed bit-claim opening).',
   'Frame 0 is EIP-8272’s recent root verifier frame. In the EIP-8288 program-scheme version of this transfer (this site’s main animation), a dependency frame (mode 3 in that draft; mode 4 in current upstream EIP-8288) required a proof for (data_hash, program_id) and came after the pool’s `VERIFY` frame. Under `PCS_open` there is no dependency frame: the claims come from the pool’s `VERIFY` frame itself. Estimates: EIP-8288 prices a dependency frame at 30,000 gas (plus a 30,000 `recursive_stark_gas` header share in upstream). Here the pool pays for its PIOP check (about 12,000 to 20,000 gas for the narrow traces the design models, up to about 69,000 gas for a Keccak withdrawal) plus about 20,000 gas per claim (about 108,000 to 128,000 gas in total for a Keccak withdrawal at drafted prices, or 69,000 to 89,000 if fixed claims are free), and the transaction carries a few hundred bytes of proof instead of a 96-byte dependency entry. In return each dApp keeps its own circuit and PIOP, and Ethereum fixes only the commitment layer.',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. Since the signature hash commits to π’s length, the wallet fixes that length before signing, padding π if needed. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
@@ -787,13 +787,15 @@ const vChip = MChip(ZX, 410, '<m>f</m>(<m>z</m>) = <m>v</m>', C.yellow, {w: 168,
 const zFly = Token(2110, 363, '<m>z</m>', C.yellow, {r: 34});
 const eqZ = Txt(1990, 500, '<k=green><m>P</m>(<m>f</m>)(<m>z</m>) = <m>Z</m>(<m>z</m>) · <m>q</m>(<m>z</m>)</k>', {size: 33, anchor: 'middle'});
 const eqZok = Check(2190, 488, C.green, {k: 1.3});
-const piC = Card(1870, 552, 330, 206, C.yellow);
+const piC = Card(1870, 552, 330, 250, C.yellow);
 const piT = CT(piC, 22, 44, 'proof <m>π</m>', {size: 28, fill: C.yellow});
 const piR = MC(piC, 50, 94, '<m>R</m>', C.yellow, {w: 54, size: 26});
 const piRb = CT(piC, 90, 102, 'seal of her work, 32 B', {size: 17, fill: C.dim});
 const piV = MC(piC, 50, 142, '<m>v</m>', C.yellow, {w: 54, size: 26});
-const piVb = CT(piC, 90, 150, 'her values at a random spot <m>z</m>', {size: 17, fill: C.dim});
-const piBl = CT(piC, 22, 194, 'public, so the PIOP must blind them', {size: 18, fill: C.dim});
+const piVb = CT(piC, 90, 150, 'her values at the random spot <m>z</m>', {size: 17, fill: C.dim});
+const piCv = MC(piC, 50, 190, '<m>c</m>', C.green, {w: 54, size: 26});
+const piCvb = CT(piC, 90, 198, 'the rules’ value at <m>z</m> (from <m>C</m>)', {size: 17, fill: C.dim});
+const piBl = CT(piC, 22, 238, '<m>v</m> is blinded: it reveals nothing', {size: 17, fill: C.dim});
 const piSz = Txt(2005, 800, 'a few hundred bytes (est.)', {size: 24, anchor: 'middle'});
 
 /* 7. Prove: what an opening proof sends, against the codeword under R */
@@ -827,11 +829,11 @@ const oWhy = Txt(3560, 700, 'if <m>v</m> were wrong, many spots would fail, so a
 const oAll = [oR, oE, oN, oCw, oLb, oQ, oP, oLa, oAr, oF, oFq, oLc, oFin, oLd, oSum, oWhy];
 
 /* Simple version: the circuit's output is shown as two parts, π and the opening proofs, without the trace, polynomial and commitment steps. */
-const spA1 = Arrow(784, 566, 712, 584, C.yellow, {sw: 2.5, head: 11}), spA2 = Arrow(820, 560, 1052, 600, C.purple, {sw: 2.5, head: 11});
+const spA1 = Arrow(784, 560, 722, 584, C.yellow, {sw: 2.5, head: 11}), spA2 = Arrow(820, 560, 1052, 600, C.purple, {sw: 2.5, head: 11});
 const spPile = [Pile(1075, 660, 3, {w: 76, h: 100, ox: 6, oy: -6, sw: 2, lines: 4}), Pile(1175, 660, 3, {w: 76, h: 100, ox: 6, oy: -6, sw: 2, lines: 4})];
-const spOL = [Txt(1125, 760, 'opening proofs', {size: 26, fill: C.purple, anchor: 'middle'}), Txt(1125, 794, 'about 150 KB each, one per claim', {size: 21, fill: C.dim, anchor: 'middle'}), Txt(1125, 824, 'they show π’s values are genuine', {size: 21, fill: C.dim, anchor: 'middle'})];
-const spPL = Txt(640, 830, '≈0.2–2 KB', {size: 21, fill: C.dim, anchor: 'middle'});
-const spWal = Txt(800, 880, 'all of this happens in Alice’s wallet, off chain', {size: 21, fill: C.dim, anchor: 'middle'});
+const spOL = [Txt(1125, 760, 'opening proofs', {size: 26, fill: C.purple, anchor: 'middle'}), Txt(1125, 794, 'about 150 KB each, one per seal', {size: 21, fill: C.dim, anchor: 'middle'}), Txt(1125, 824, 'they show π’s values are genuine', {size: 21, fill: C.dim, anchor: 'middle'})];
+const spPL = Txt(640, 862, '≈0.2–2 KB', {size: 21, fill: C.dim, anchor: 'middle'});
+const spWal = Txt(1125, 862, 'all of this happens in Alice’s wallet, off chain', {size: 21, fill: C.dim, anchor: 'middle'});
 beat(1, 18, (t) => {
   A.fadeOut([eth, ethT, aConv, lConv, aHide, xHide, lHide, device, devLbl, shows, showRows], t, 0.6);
   A.draw(cir, t + 0.5, 1.0); A.write(cirT, t + 0.9, 0.7); A.fadeIn(cirSub, t + 1.2, 0.5);
@@ -839,9 +841,9 @@ beat(1, 18, (t) => {
   A.flash(fW, t + 2.3, 0.7); A.flash(fS, t + 2.35, 0.7);
   A.pulse(cir, t + 2.9, 0.7, 1.06); A.fadeIn(spWal, t + 2.9, 0.5);
   A.draw(aT, t + 3.3, 0.5);
-  A.to(piC, t, 0.01, {x: 640, y: 692}, {e: lin});
+  A.to(piC, t, 0.01, {x: 640, y: 714}, {e: lin});
   A.draw(spA1, t + 4.0, 0.5); A.draw(piC, t + 4.4, 0.8); A.write(piT, t + 4.8, 0.6);
-  A.fadeIn([piR, piRb], t + 5.6, 0.4, {lag: 0.2}); A.fadeIn([piV, piVb], t + 6.4, 0.4, {lag: 0.2}); A.fadeIn(piBl, t + 7.2, 0.5); A.fadeIn(spPL, t + 7.8, 0.5);
+  A.fadeIn([piR, piRb], t + 5.6, 0.4, {lag: 0.2}); A.fadeIn([piV, piVb], t + 6.4, 0.4, {lag: 0.2}); A.fadeIn([piCv, piCvb], t + 7.0, 0.4, {lag: 0.2}); A.fadeIn(piBl, t + 7.6, 0.5); A.fadeIn(spPL, t + 8.0, 0.5);
   A.draw(spA2, t + 9.2, 0.5); spPile.forEach((p, i) => { A.fadeIn(p, t + 9.6 + i * 0.4, 0.01); A.fadeIn(p.pages, t + 9.6 + i * 0.4, 0.2, {lag: 0.07, dy: 10}); });
   A.fadeIn(spOL, t + 10.6, 0.5, {lag: 0.5});
 });
@@ -882,6 +884,7 @@ beat(1, 21, (t) => {
 const pile = Pile(3640, 470, 16, {w: 280, h: 380, sw: 3, hidden: true});
 const pileTop = Txt(3700, 112, 'opening proof', {size: 32, anchor: 'middle', fill: C.purple});
 const pileKB = Txt(3690, 718, '≈ 150 KB each (est.)', {size: 36, anchor: 'middle', fill: C.purple});
+const pileIn = [Txt(3690, 812, 'inside: ≈100 random pieces of the sealed table,', {size: 20, anchor: 'middle', fill: C.purple}), Txt(3690, 840, 'each with its hash path to the seal', {size: 20, anchor: 'middle', fill: C.purple})];
 const pileN2 = Txt(3690, 770, 'too big for a transaction', {size: 22, anchor: 'middle', fill: C.dim});
 const stSplit = Card(2480, 640, 820, 200, C.grey, {fo: 0.06, sw: 2});
 const stSplitT = CT(stSplit, 410, 40, 'her proof (a STARK)  =  <k=yellow><m>π</m></k>  +  <k=purple>opening proofs</k>', {size: 24, anchor: 'middle'});
@@ -911,7 +914,7 @@ beat(1, 21, (t) => {
   A.pulse(opPile[0], t + 3.6, 0.7, 1.04);
   A.fadeIn(opSub, t + 5.6, 0.5); A.fadeIn(opFoot, t + 6.8, 0.5, {dy: 8});
   A.fadeIn(pileKB, t + 7.8, 0.6);
-  A.fadeIn(pileN2, t + 8.8, 0.6);
+  A.fadeIn(pileN2, t + 8.8, 0.6); A.fadeIn(pileIn, t + 9.6, 0.5, {lag: 0.4});
   A.draw(stSplit, t + 10.0, 0.8); A.fadeIn(stSplitT, t + 10.6, 0.5);
   A.fadeIn(stSplitP, t + 12.0, 0.5, {dx: -8}); A.pulse(piC, t + 12.0, 0.7, 1.06);
   A.fadeIn(stSplitO, t + 14.6, 0.5, {dx: -8}); A.pulse(pile, t + 14.6, 0.7, 1.04);
@@ -953,7 +956,7 @@ const ghostThis = Txt(5100, 676, 'here: no fourth frame; the pool checks its own
 const ghostG1 = Txt(4930, 752, 'both versions use EIP-8288: proofs checked outside the EVM, merged into one STARK per block', {size: 20, fill: C.dim, anchor: 'middle'});
 const ghostG2 = Txt(4930, 784, 'gas, Keccak pool (est.): about 2–4× the program-proof version, the price of keeping its own circuit and PIOP', {size: 20, fill: C.dim, anchor: 'middle'});
 beat(2, 21, (t) => {
-  A.fadeOut([pileTop, pileKB, pileN2, pile, stSplit, OPS], t, 0.6);
+  A.fadeOut([pileTop, pileKB, pileN2, pileIn, pile, stSplit, OPS], t, 0.6);
   A.cam(t + 0.2, 2.4, {cx: 4930, cy: 450});
   A.fadeOut(piC, t + 0.4, 0.5); A.fadeIn(piTok, t + 0.3, 0.3, {s0: 0.6});
   A.to(piTok, t + 0.5, 2.4, {x: fPi.get('x', 0), y: fPi.get('y', 0)}); A.handoff(piTok, fPi, t + 2.9, 0.1);
