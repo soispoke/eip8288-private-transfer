@@ -537,6 +537,8 @@ const CAP = [
   'Alice then sends two numbers: the curve’s height at position 10 and at the next position, 32 and 35. Checking them is checking the app’s rule again: 35 is 32 plus 3. A few numbers and one small calculation stand in for the whole table.',
   'Why is that enough? Suppose one row were wrong, 12 instead of 11. The curve must still pass through every row, so the whole curve bends, and at position 10 the rule fails badly: 200 is not 152 plus 3. A mistake anywhere shows up almost everywhere.',
   'One gap remains: Alice sends the numbers herself. With the wrong table she could simply say 32 and 35 and pass the check. So each number needs evidence that it really is the height of the curve behind her fingerprint. That evidence is an opening proof, and the cheater cannot make one.',
+  'How does an opening proof work? Like a spot check. Alice writes out her curve at many more positions than her table has rows, and the fingerprint covers all of them. The checker picks a few hundred at random, and Alice shows each one with the chain of hashes that links it to the fingerprint, so she cannot swap it. If her 32 were fake, the values would not fit together, and many of the random spots would expose her.',
+  'Why is it big? Each spot, shown with its chain of hashes, costs about a kilobyte. A few hundred spots, plus a few extra rounds that check the values really lie on one curve, add up to about 300 KB. Today’s small proofs use elliptic curves, which quantum computers would break. Hashes stay safe, but a hash proves nothing until you reveal what is under it, so you pay in spot checks.',
   'So a proof has two parts. The short one is the fingerprint and the numbers: checking it means checking the app’s own rule. The long one is the opening proofs, which only show that the numbers really belong to the fingerprinted table. That check is the same for every app, and it is where almost all the bytes are.',
   'So the short proof goes in the transaction, and the app’s contract checks it cheaply. The contract cannot tell whether the numbers are genuine. Instead, the transaction lists a claim for each number, and the contract checks that each claim it relies on is on that list.',
   'The opening proofs never go on chain, and never even leave the wallet. Alice’s wallet merges them into one small proof, called a STARK, that travels beside the transaction. Nodes check it directly, outside any contract, and every second they merge the STARKs they hold into one.',
@@ -556,6 +558,8 @@ const NOTE = [
   'The numbers are evaluations of the committed polynomial. The rule becomes an equation that the curve satisfies at every position when every row is right: here, curve(x + 1) = curve(x) + 3. This reduction from all rows to one random position is the part called the PIOP. Real rules need a second, helper curve to make the equation hold everywhere; this toy rule does not.',
   'With 12 in the last row, the curve through the rows is 3x + 2 + x(x − 1)(x − 2)/6, which is 152 at position 10 and 200 at position 11. The rule’s equation is then wrong at every position except rows 0 and 1, because two different polynomials of low degree can agree at only a few positions (the Schwartz–Zippel lemma). A different table also gives a different fingerprint, and so a different random position; position 10 is kept here to compare the two tables.',
   'An opening proof shows that the polynomial behind a commitment has a given value at a given position. It reveals about two hundred random pieces of the encoded table, each with a path through the hash tree to the commitment; a false value is inconsistent with many of them. The scheme is WHIR today.',
+  'This is WHIR, the scheme in the draft, in outline. Writing the curve at more positions is a Reed–Solomon encoding: at rate 1/2 the codeword is twice as long as the table, and two different low-degree curves agree on at most half of its positions, so a codeword that does not come from one curve with the claimed value differs from every such curve in many places. The fingerprint is the Merkle root of that codeword, plus one extra value, and each revealed spot comes with its Merkle path. At the reference parameters for 2²⁴ cells the first round opens 224 spots. Each spot catches a cheater only with some probability, so it takes a few hundred to reach about 128 bits of security. Revealed spots are pieces of Alice’s encoded data, so the wallet masks the data before committing.',
+  'The extra rounds are folding: the wallet halves the codeword several times with random challenges, commits each smaller one under its own root and opens it at fewer spots (56, 32, 23 and 17 at the reference parameters), until a small polynomial is sent in full. A Merkle path at this size is about 20 to 25 hashes of 32 bytes, so the first round’s paths alone come to roughly 224 × 24 × 32 bytes, about 170 KB; with the opened values and the other rounds, the draft repository measures 276 to 336 KiB per opening proof. The size grows only slowly with the table, because paths lengthen logarithmically and the number of spots is set by the security level. Elliptic-curve polynomial commitments such as KZG open in 48 bytes, because the curve does the binding, but they rely on assumptions that quantum computers would break.',
   'Measured in the draft repository’s example, a zero-knowledge proof of Keccak-256 Merkle membership: the short part is 273 bytes (the public values, two commitments’ roots, six numbers and the index of the frame of claims) and the three opening proofs are about 890 KiB together. The short part is the commitment plus the PIOP’s values; together with the opening proofs it forms a STARK.',
   'Each claim says: under this version of the scheme, the polynomial behind this commitment has this value at this point. The transaction declares each claim as a 32-byte Keccak-256 hash in an EIP-8288 dependency frame. There is no precompile: the contract hashes the claim it needs and finds the hash in that frame through EIP-8141’s frame introspection (`FRAMEPARAM`, `FRAMEDATALOAD`). The contract checks its equation with `MULFIELD`, a new instruction that multiplies in a binary field. A transaction pays 5,000 gas plus 1,000 per claim. Measured for the membership proof: 20,097 gas for the frame that checks the short proof, 31,680 in all with its 3 claims.',
   'The wallet merges the opening proofs of all its claims into one STARK, and the transaction travels with it in an EIP-8288 mode 1 mempool wrapper, so nodes check one STARK per transaction, however many claims it has. The draft’s benchmarks count 0.1 s of proving per claim for this merge. Every second (`AGGREGATION_INTERVAL` = 1000 ms) nodes merge the STARKs they hold into a recursive STARK. The draft assumes zero-knowledge openings: the wallet masks its data before committing, so nothing reveals the payment.',
@@ -757,13 +761,89 @@ beat(2, 17, (t) => {                               /* the gapT, and the opening 
   A.fadeIn(opN, t + 12.8, 0.5, {lag: 0.4});
 });
 
+/* 2i, 2j. How an opening proof works (a spot check), and why it is big */
+const OX0 = SX(2), OY0 = 2400;
+const goOp = (t) => A.cam(t, 1.6, {cx: OX0 + 800, cy: OY0 + 450});
+const head9a = Txt(OX0 + 800, OY0 + 84, 'an opening proof is a spot check', {size: 38, anchor: 'middle'});
+const NL = 32, LX = (i) => OX0 + 219 + 37.5 * i, LY = [OY0 + 540, OY0+ 470, OY0 + 405, OY0 + 345, OY0 + 290, OY0 + 238];
+const lvl = [Array.from({length: NL}, (_, i) => LX(i))];
+for (let k = 1; k <= 5; k++) lvl.push(Array.from({length: lvl[k - 1].length / 2}, (_, i) => (lvl[k - 1][2 * i] + lvl[k - 1][2 * i + 1]) / 2));
+const treeOp = [0, 1, 2, 3, 4].map((k) => {
+  const m = new M(0, 0, null, 0);
+  lvl[k + 1].forEach((x, i) => [2 * i, 2 * i + 1].forEach((j) => shape(m, `M${lvl[k][j]},${LY[k]} L${x},${LY[k + 1]}`, {stroke: C.faint, sw: 1.6})));
+  return m;
+});
+const fpOp = MChip(OX0 + 800, OY0 + 196, 'fingerprint  <c>8f3a…c1</c>', C.yellow, {w: 340, size: 24});
+const cellOp = lvl[0].map((x) => Card(x - 14, OY0 + 548, 28, 40, C.yellow, {fo: 0.12, sw: 2, r: 5}));
+const st1op = Txt(OX0 + 800, OY0 + 664, '1.  Alice writes out her curve at many more positions than her table has rows', {size: 23, anchor: 'middle'});
+const SPOT = [3, 9, 14, 21, 27];
+const ring = SPOT.map((i) => Curve(circ(LX(i), OY0 + 568, 27), C.blueL, {sw: 3}));
+const st2op = Txt(OX0 + 800, OY0 + 712, '2.  the checker picks a few hundred of them at random', {size: 23, anchor: 'middle', fill: C.blueL});
+let pd = `M${LX(14)},${OY0 + 548}`, pi = 14;
+for (let k = 0; k < 5; k++) { pd += ` L${lvl[k][pi]},${LY[k]}`; pi = Math.floor(pi / 2); pd += ` L${lvl[k + 1][pi]},${LY[k + 1]}`; }
+pd += ` L${OX0 + 800},${OY0 + 214}`;
+const pathOp = Curve(pd, C.purple, {sw: 4.5});
+const st3op = Txt(OX0 + 800, OY0 + 760, '3.  each is shown with its chain of hashes up to the fingerprint, so it cannot be swapped', {size: 23, anchor: 'middle', fill: C.purple});
+const BAD = [0, 3, 5, 6, 10, 12, 14, 15, 17, 19, 21, 22, 25, 27, 28, 30];
+const badOp = BAD.map((i) => Card(LX(i) - 14, OY0 + 548, 28, 40, C.red, {fo: 0.45, sw: 2, r: 5}));
+const xOp = SPOT.filter((i) => BAD.includes(i)).map((i) => Cross(LX(i), OY0 + 616 - 6, C.red, {k: 0.8}));
+const st4op = Txt(OX0 + 800, OY0 + 812, '4.  with a fake 32, the values cannot all lie on one curve, and many spots expose it', {size: 23, anchor: 'middle', fill: C.red});
+const OPA = [head9a, treeOp, fpOp, cellOp, st1op, ring, st2op, pathOp, st3op, badOp, xOp, st4op];
+beat(2, 26, (t) => {                               /* the spot check */
+  A.fadeOut(TOY, t, 0.5); goOp(t);
+  A.write(head9a, t + 1.4, 0.9);
+  A.fadeIn(fpOp, t + 2.0, 0.5, {s0: 0.6});
+  A.draw(cellOp, t + 2.6, 0.4, {lag: 0.03}); A.fadeIn(st1op, t + 3.4, 0.6, {dy: 8});
+  A.draw(treeOp, t + 5.2, 0.8, {lag: 0.3}); A.pulse(fpOp, t + 7.0, 0.6, 1.08);
+  A.draw(ring, t + 9.0, 0.5, {lag: 0.25}); A.fadeIn(st2op, t + 9.4, 0.6, {dy: 8});
+  A.draw(pathOp, t + 12.6, 1.6); A.fadeIn(st3op, t + 13.0, 0.6, {dy: 8}); A.pulse(fpOp, t + 14.3, 0.6, 1.1);
+  A.fadeIn(badOp, t + 18.6, 0.4, {lag: 0.04}); A.fadeIn(st4op, t + 19.0, 0.6, {dy: 8});
+  A.draw(xOp, t + 21.0, 0.4, {lag: 0.3});
+});
+const head9b = Txt(OX0 + 800, OY0 + 84, 'why it is big', {size: 38, anchor: 'middle'});
+const eqA = Card(OX0 + 90, OY0 + 160, 400, 150, C.purple, {fo: 0.06});
+eqA.a = CT(eqA, 200, 58, 'one spot + its hash chain', {size: 24, anchor: 'middle'}); eqA.b = CT(eqA, 200, 116, '≈ 1 KB', {size: 38, anchor: 'middle', fill: C.purple});
+const eqX = Txt(OX0 + 540, OY0 + 250, '×', {size: 44, anchor: 'middle'});
+const eqB = Card(OX0 + 590, OY0 + 160, 400, 150, C.blueL, {fo: 0.06});
+eqB.a = CT(eqB, 200, 58, 'spots, plus extra rounds', {size: 24, anchor: 'middle'}); eqB.b = CT(eqB, 200, 116, 'a few hundred', {size: 34, anchor: 'middle', fill: C.blueL});
+const eqE = Txt(OX0 + 1040, OY0 + 250, '=', {size: 44, anchor: 'middle'});
+const eqC = Card(OX0 + 1090, OY0 + 160, 420, 150, C.purple, {fo: 0.12, sw: 3.5});
+eqC.a = CT(eqC, 210, 58, 'one opening proof', {size: 24, anchor: 'middle'}); eqC.b = CT(eqC, 210, 120, '≈ 300 KB', {size: 46, anchor: 'middle', fill: C.purple});
+const eqN = Txt(OX0 + 800, OY0 + 360, 'the extra rounds check that the revealed values really lie on one curve', {size: 21, anchor: 'middle', fill: C.dim});
+const ecC = Card(OX0 + 90, OY0 + 440, 680, 290, C.grey, {fo: 0.05});
+ecC.a = CT(ecC, 32, 56, 'elliptic curves, used today', {size: 28});
+ecC.b = CT(ecC, 32, 116, 'proofs of a few hundred bytes', {size: 24});
+ecC.c = CT(ecC, 32, 160, 'the math itself ties the number to the fingerprint', {size: 22, fill: C.dim});
+ecC.d = CT(ecC, 32, 236, 'quantum computers would break it', {size: 25, fill: C.red});
+const ecX = Cross(OX0 + 710, OY0 + 668, C.red, {k: 1.0});
+const hsC = Card(OX0 + 830, OY0 + 440, 680, 290, C.green, {fo: 0.05});
+hsC.a = CT(hsC, 32, 56, 'hashes', {size: 28, fill: C.green});
+hsC.b = CT(hsC, 32, 116, 'safe against quantum computers', {size: 24});
+hsC.c = CT(hsC, 32, 160, 'but a hash proves nothing until you reveal what is under it', {size: 22, fill: C.dim});
+hsC.d = CT(hsC, 32, 236, 'so you pay in spot checks', {size: 25, fill: C.purple});
+const hsK = Check(OX0 + 1450, OY0 + 496, C.green, {k: 1.0});
+const foot9b = Txt(OX0 + 800, OY0 + 800, 'that is why leanPCS keeps opening proofs off chain', {size: 26, anchor: 'middle', fill: C.gold});
+const OPB = [head9b, eqA, eqA.a, eqA.b, eqX, eqB, eqB.a, eqB.b, eqE, eqC, eqC.a, eqC.b, eqN, ecC, ecC.a, ecC.b, ecC.c, ecC.d, ecX, hsC, hsC.a, hsC.b, hsC.c, hsC.d, hsK, foot9b];
+beat(2, 24, (t) => {                               /* why it is big */
+  A.fadeOut(OPA, t, 0.6);
+  A.write(head9b, t + 1.0, 0.8);
+  A.draw(eqA, t + 1.6, 0.7); A.fadeIn([eqA.a, eqA.b], t + 2.0, 0.5, {lag: 0.4});
+  A.fadeIn(eqX, t + 4.0, 0.4); A.draw(eqB, t + 4.2, 0.7); A.fadeIn([eqB.a, eqB.b], t + 4.6, 0.5, {lag: 0.4});
+  A.fadeIn(eqN, t + 6.4, 0.5, {dy: 8});
+  A.fadeIn(eqE, t + 8.0, 0.4); A.draw(eqC, t + 8.2, 0.7); A.fadeIn([eqC.a, eqC.b], t + 8.6, 0.5, {lag: 0.4}); A.pulse(eqC, t + 9.6, 0.7, 1.05);
+  A.draw(ecC, t + 11.6, 0.8); A.fadeIn([ecC.a, ecC.b, ecC.c], t + 12.0, 0.5, {lag: 0.4}); A.fadeIn(ecC.d, t + 14.0, 0.5); A.draw(ecX, t + 14.4, 0.4);
+  A.draw(hsC, t + 15.6, 0.8); A.fadeIn([hsC.a, hsC.b], t + 16.0, 0.5, {lag: 0.4}); A.draw(hsK, t + 16.8, 0.4);
+  A.fadeIn(hsC.c, t + 17.6, 0.5); A.fadeIn(hsC.d, t + 19.0, 0.5);
+  A.fadeIn(foot9b, t + 21.0, 0.6, {dy: 8});
+});
+
 /* 3. The proof has two parts */
 const X3 = SX(3);
 const head3 = Txt(X3 + 800, 110, 'one proof, two parts', {size: 40, anchor: 'middle'});
 const all3 = Pile(X3 + 770, 430, 10, {w: 220, h: 260, sw: 2.6, col: C.ink});
 const sp = Card(X3 + 150, 250, 470, 330, C.yellow);
 const spT = CT(sp, 28, 56, 'short proof', {size: 34, fill: C.yellow});
-const spB = CT(sp, 442, 54, 'real one: 252 bytes', {size: 24, fill: C.dim, anchor: 'end'});
+const spB = CT(sp, 442, 54, 'real one: 273 bytes', {size: 24, fill: C.dim, anchor: 'end'});
 const spSeal = MC(sp, 108, 132, 'fingerprint', C.yellow, {w: 160, size: 26});
 const spSealL = CT(sp, 206, 141, 'of her table', {size: 24});
 const spNum = [MC(sp, 60, 204, '32', C.yellow, {w: 62, size: 26}), MC(sp, 134, 204, '35', C.yellow, {w: 62, size: 26})];
@@ -778,7 +858,7 @@ const tag3 = [Txt(X3 + 385, 664, 'different for each app', {size: 26, anchor: 'm
               Txt(X3 + 1170, 758, 'the same kind of check for every app', {size: 26, anchor: 'middle', fill: C.purple})];
 const S3 = [head3, all3, sp, spT, spB, spSeal, spSealL, spNum, spNumL, spWhy, op3, op3T, op3B, op3W, tag3];
 beat(3, 19, (t) => {
-  A.fadeOut(TOY, t, 0.5); go(t, 3);
+  A.fadeOut(OPB, t, 0.5); go(t, 3);
   A.write(head3, t + 1.4, 1.0);
   A.fadeIn(all3, t + 1.6, 0.6, {s0: 0.8});
   A.to(all3, t + 3.4, 1.2, {x: X3 + 1130, y: 420}); A.handoff(all3, op3, t + 4.5, 0.3);
