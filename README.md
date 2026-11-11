@@ -8,7 +8,7 @@ The animation shows the program scheme proposed for EIP-8288's `0x11` in the eth
 
 ## PCS_open version
 
-A second animation, *How PCS_open Works*, follows a transfer from the same pool under PCS_open: the pool's contract checks its own PIOP and records polynomial-commitment claims, and EIP-8288's aggregate checks the openings. It then shows how the commitment scheme can be upgraded. Open it at **https://soispoke.github.io/eip8288-private-transfer/pcs-open/**. It shows a design under discussion, and its sizes and gas figures are model estimates, as its spec notes say.
+A second animation, *How PCS_OPEN Works*, follows a transfer from the same pool under the leanPCS EIP draft: the transaction declares polynomial-commitment claims in an EIP-8288 dependency frame, the pool's contract checks its own PIOP and uses `PCS_OPEN` to check that each claim is declared, and EIP-8288's aggregate checks the openings. It then shows how the commitment scheme can be upgraded. Open it at **https://soispoke.github.io/eip8288-private-transfer/pcs-open/**. It follows a draft that is a work in progress: sizes are measured where its spec notes say so, and gas prices are not final.
 
 A simple version, at **https://soispoke.github.io/eip8288-private-transfer/pcs-open-simple/**, tells the same story without the trace, polynomial and commitment equations: the wallet's proof is shown as two parts, a small proof the pool's code checks in the EVM and opening proofs that nodes check natively and merge. The detailed steps are in its spec notes and in the full version.
 
