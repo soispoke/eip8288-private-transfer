@@ -71,7 +71,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--serif);margin:0}
 <main class="wrap">
   <header class="top">
     <h1>PCS_OPEN, the Idea</h1>
-    <a class="altver" href="../pcs-open-simple/" style="color:var(--dim);font-size:15px;align-self:center">step by step →</a>
+    <a class="altver" href="../pcs-open-simple/" style="color:var(--dim);font-size:15px;align-self:center;margin-left:auto">step by step →</a>
     <nav class="chapters" id="chapters" aria-label="Chapters"></nav>
   </header>
   <div class="stagebox">
@@ -532,25 +532,39 @@ const CAP = [
   'Private apps on Ethereum rely on proofs, and the proofs that stay safe against quantum computers are large. `PCS_OPEN` is a proposal to check them cheaply, by splitting the work in two.',
   'Alice pays Bob through a private app. Her wallet does the computation and produces a proof: it convinces everyone that the payment follows the app’s rules, without revealing who paid whom or how much.',
   'The problem is size. A proof built from hash functions, the kind that resists quantum computers, weighs hundreds of kilobytes, thousands of times more than an ordinary payment. Putting it on chain and checking it in a smart contract would cost far too much.',
-  'But the proof has two parts. A short one, a few hundred bytes, holds a seal of Alice’s computation and a few numbers taken from it: checking it means checking the app’s own rules. The long part, the opening proofs, only shows that those numbers really come from the sealed computation, and that check is the same for every app.',
-  'So the short proof goes in the transaction, and the app’s contract checks it cheaply. The contract cannot tell whether the numbers are genuine. Instead, the transaction lists them as claims, and the contract asks a new built-in function, `PCS_OPEN`, whether each claim it relies on is on that list.',
+  'To see how a proof works, take a toy app with one rule: each row is the row before plus 3. Alice’s wallet fills in a table that follows it: 2, 5, 8, 11. A real table has millions of rows and holds her secrets, so she cannot simply send it.',
+  'The wallet reads the table as a curve: the line that passes through every row’s value. The curve also has a height at positions far beyond the rows. Here it is a straight line, because every step adds the same amount.',
+  'Alice first sends a commitment: a short fingerprint of her table. It reveals nothing about the table, but it pins it down, since any other table would give a different fingerprint. From now on she cannot change her table.',
+  'Next comes a random position, far outside the rows: here, 10. It is computed from the fingerprint, so Alice cannot choose it, and she could not know it before committing to her table.',
+  'Alice then sends two numbers: the curve’s height at position 10 and at the next position, 32 and 35. Checking them is checking the app’s rule again: 35 is 32 plus 3. A few numbers and one small calculation stand in for the whole table.',
+  'Why is that enough? Suppose one row were wrong, 12 instead of 11. The curve must still pass through every row, so the whole curve bends, and at position 10 the rule fails badly: 200 is not 152 plus 3. A mistake anywhere shows up almost everywhere.',
+  'One gap remains: Alice sends the numbers herself. With the wrong table she could simply say 32 and 35 and pass the check. So each number needs evidence that it really is the height of the curve behind her fingerprint. That evidence is an opening proof, and the cheater cannot make one.',
+  'So a proof has two parts. The short one is the fingerprint and the numbers: checking it means checking the app’s own rule. The long one is the opening proofs, which only show that the numbers really belong to the fingerprinted table. That check is the same for every app, and it is where almost all the bytes are.',
+  'So the short proof goes in the transaction, and the app’s contract checks it cheaply. The contract cannot tell whether the numbers are genuine. Instead, the transaction lists a claim for each number, and the contract asks a new built-in function, `PCS_OPEN`, whether each claim it relies on is on that list.',
   'The opening proofs never go on chain. They travel beside the transaction through the network, where nodes check them directly, outside any contract. Every second, nodes merge the opening proofs they hold into one small proof, called a STARK, that all of them are valid.',
   'A block carries one such proof, covering every claim of every transaction in it, whatever the app. Validators check that single proof. A block with a false claim is invalid, which is why the contract could rely on the list without checking the claims itself.',
   'This split gives each side the job it does best. Apps keep their own rules and their own proof design. Ethereum takes over the heavy, generic part, most of the cost of checking a proof, once per block for everyone. The alternative, checking whole proofs, needs every app to be written for one machine that Ethereum fixes.',
-  'The scheme behind the seals can be replaced later: a fork adds a new version, and apps move over without changing their code. What contracts depend on for good is small: the kind of numbers used, and what a claim means.',
+  'The scheme behind the fingerprints can be replaced later: a fork adds a new version, and apps move over without changing their code. What contracts depend on for good is small: the kind of numbers used, and what a claim means.',
   'In short: the app’s contract checks a short proof and relies on claims, and the network checks the heavy opening proofs and merges them into one proof per block. This is a draft under discussion. The simple and detailed versions show each step.',
 ];
 const NOTE = [
   'After the leanPCS EIP draft in github.com/TomWambsgans/PCS-openings-aggregation (`eip-draft_leanPCS.md`, a work in progress, read at commit b50eb122 of 2026-11-09). PCS stands for polynomial commitment scheme. This overview leaves out the frame transaction, the proving steps and the upgrade rules, which the simple and detailed versions show.',
   'The proof is a zero-knowledge proof: it shows that Alice knows secrets (her notes and key) that satisfy the app’s rules for the public values of the payment, and reveals nothing else. The example in the other versions is a transfer in the minimal shielded pool.',
   'Sizes are from the draft repository’s measured example, a zero-knowledge proof of Keccak-256 Merkle membership: 252 bytes for the short part and 248, 278 and 333 KiB for its three opening proofs, about 860 KiB together. A plain ETH transfer is about 110 bytes. Proofs used on Ethereum today are a few hundred bytes because they rely on elliptic curves, which quantum computers would break.',
-  'In proof-system terms: the wallet writes every value of its computation in a table, reads the table as a polynomial and commits to it; the commitment (56 bytes: a Merkle root and one value) is the seal. The numbers are values of that polynomial at a random point. The app’s rules become one equation on those numbers, the part called the PIOP. An opening proof shows that a number is the committed polynomial’s value at that point: Merkle paths to about a hundred random places of an encoding of the table.',
+  'The table is the trace of the computation, and the rule is the relation the proof is about. The toy rule stands for all of an app’s checks, which a real circuit applies row by row in the same way.',
+  'The curve is a polynomial: the unique one of lowest degree through the rows’ values, here 3x + 2. Real proof systems use numbers of a finite field, 192 bits long in the draft, where there is no near or far; the picture with ordinary numbers shows the same idea.',
+  'The fingerprint is a polynomial commitment. In the draft it is 56 bytes: the root of a hash tree over an encoding of the table, and one extra value. The wallet also mixes random masks into the table before committing, so that nothing sent later reveals her secrets.',
+  'The position is derived by hashing the commitment and the public values of the payment, a technique called Fiat–Shamir. In a real proof it is one of about 2¹⁹² possible positions, so guessing it in advance is hopeless.',
+  'The numbers are evaluations of the committed polynomial. The rule becomes an equation that the curve satisfies at every position when every row is right: here, curve(x + 1) = curve(x) + 3. This reduction from all rows to one random position is the part called the PIOP. Real rules need a second, helper curve to make the equation hold everywhere; this toy rule does not.',
+  'With 12 in the last row, the curve through the rows is 3x + 2 + x(x − 1)(x − 2)/6, which is 152 at position 10 and 200 at position 11. The rule’s equation is then wrong at every position except rows 0 and 1, because two different polynomials of low degree can agree at only a few positions (the Schwartz–Zippel lemma). A different table also gives a different fingerprint, and so a different random position; position 10 is kept here to compare the two tables.',
+  'An opening proof shows that the polynomial behind a commitment has a given value at a given position. It reveals about a hundred random pieces of the encoded table, each with a path through the hash tree to the commitment; a false value is inconsistent with many of them. The scheme is WHIR today.',
+  'Measured in the draft repository’s example, a zero-knowledge proof of Keccak-256 Merkle membership: the short part is 252 bytes (two commitments’ roots, five numbers and the public values) and the three opening proofs are about 860 KiB together. The short part is the commitment plus the PIOP’s values; together with the opening proofs it forms a STARK.',
   'Each claim says: the polynomial behind this commitment has this value at this point. The transaction declares each claim as a 32-byte hash in an EIP-8288 dependency frame. `PCS_OPEN` is a precompile: it returns 1 if the claim it is given is declared by the current transaction. The contract checks its equation with `MULFIELD`, a new instruction that multiplies in a binary field. Measured for the membership proof: 14,289 gas of contract execution, before a charge per claim that the draft has not set.',
   'The transaction, its claims and their opening proofs travel in an EIP-8288 mempool wrapper. Nodes verify opening proofs in native code, and every second (`AGGREGATION_INTERVAL` = 1000 ms) merge the ones they hold into a recursive STARK. Opening proofs are public while they travel, so the wallet masks its data before committing: they reveal nothing about the payment.',
   'The block header carries one recursive STARK and a hash of every claim the block’s transactions declare, as in EIP-8288. Validators recompute that hash from the transactions and check the STARK against it. The same proof also covers the post-quantum signatures EIP-8288 aggregates.',
   'That the commitment scheme is about 95% of the cost of checking a proof is an estimate, not a measurement. Each app is responsible for the soundness and zero knowledge of its own short proof, which no fork can patch once its contract is immutable. The alternative is EIP-8288’s reserved scheme for whole proofs, which needs Ethereum to fix an instruction set, such as RISC-V, that every proven program is written for. Which of the two Ethereum should adopt is not decided.',
-  'The seal scheme is WHIR today. Every `PCS_OPEN` call names a version, a fork adds the next one and removes the old one after a deprecation period, and an app’s contract moves the seal of its fixed data by checking that the old and new seals give the same value at a random point. Fixed for good: the binary field (64-bit data, 192-bit points and values), `MULFIELD` and the meaning of a claim.',
-  'Still open in the draft: the price of a claim, the parameters of the seal scheme, a security proof of the two checks together, and how an app ties a proof to its transaction.',
+  'The commitment scheme is WHIR today. Every `PCS_OPEN` call names a version, a fork adds the next one and removes the old one after a deprecation period, and an app’s contract moves the commitment to its fixed data by checking that the old and new commitments give the same value at a random position. Fixed for good: the binary field (64-bit data, 192-bit points and values), `MULFIELD` and the meaning of a claim.',
+  'Still open in the draft: the price of a claim, the parameters of the commitment scheme, a security proof of the two checks together, and how an app ties a proof to its transaction.',
 ];
 /* The aggregate STARK: a gold rounded badge, so it never looks like the proof π. */
 function Badge(x, y, o = {}) {
@@ -631,28 +645,142 @@ beat(1, 14, (t) => {
   A.fadeIn(no2, t + 9.6, 0.7, {dy: 8});
 });
 
+/* 2b to 2h. A toy example on one slide: ruleC, table, curve, fingerprint, random position, numbers, check, opening proof */
+const TX0 = SX(2), TY0 = 1200;
+const goToy = (t) => A.cam(t, 1.6, {cx: TX0 + 800, cy: TY0 + 450});
+const ruleC = Card(TX0 + 70, TY0 + 80, 420, 120, C.green, {fo: 0.06});
+const ruleCT = CT(ruleC, 24, 42, 'the app’s rule', {size: 22, fill: C.dim});
+const ruleCS = CT(ruleC, 24, 88, 'each row = the row before + 3', {size: 27, fill: C.green});
+const tabT = Txt(TX0 + 280, TY0 + 262, 'Alice’s table', {size: 26, anchor: 'middle'});
+const tabLock = Lock(TX0 + 392, TY0 + 252, C.red, {k: 0.8});
+const VAL = [2, 5, 8, 11], CYc = (i) => TY0 + 320 + 74 * i;
+const tcell = VAL.map((v, i) => { const m = Card(TX0 + 200, CYc(i) - 29, 160, 58, C.ink, {fo: 0.04, sw: 2.2}); m.v = CT(m, 80, 40, String(v), {size: 30, anchor: 'middle'}); return m; });
+const cellL = VAL.map((v, i) => Txt(TX0 + 184, CYc(i) + 8, 'row ' + i, {size: 20, fill: C.dim, anchor: 'end'}));
+const plusA = [0, 1, 2].map((i) => Arrow(TX0 + 368, CYc(i) + 6, TX0 + 368, CYc(i + 1) - 6, C.green, {bend: -22, sw: 2.5, head: 10}));
+const plusL = [0, 1, 2].map((i) => Txt(TX0 + 402, CYc(i) + 46, '+3', {size: 22, fill: C.green}));
+const badCell = Card(TX0 + 200, CYc(3) - 29, 160, 58, C.red, {fo: 0.12, sw: 2.6}); badCell.v = CT(badCell, 80, 40, '12', {size: 30, anchor: 'middle', fill: C.red});
+const badL = Txt(TX0 + 376, CYc(3) + 8, 'wrong', {size: 20, fill: C.red});
+/* the plot */
+const OX = TX0 + 640, OY = TY0 + 650, UX = 70, UY = 10;
+const px = (x) => OX + UX * x, py = (v) => OY - UY * v;
+const axX = Arrow(OX - 20, OY, px(11.9), OY, C.faint, {sw: 2.5, head: 11});
+const axY = Arrow(OX, OY + 16, OX, py(41), C.faint, {sw: 2.5, head: 11});
+const axXL = Txt(px(11.9), OY + 62, 'position', {size: 20, fill: C.dim, anchor: 'end'});
+const axYL = Txt(OX - 14, py(41) - 12, 'height', {size: 20, fill: C.dim, anchor: 'middle'});
+const tkN = [0, 1, 2, 3].map((i) => Txt(px(i), OY + 30, String(i), {size: 20, fill: C.dim, anchor: 'middle'}));
+const tkR = Txt(px(1.5), OY + 62, 'the rows', {size: 20, fill: C.dim, anchor: 'middle'});
+const rdot = VAL.map((v, i) => Dot(px(i), py(v), C.ink, {r: 7}));
+const rfly = VAL.map((v, i) => Dot(TX0 + 280, CYc(i), C.ink, {r: 7}));
+const crv = Curve(`M${px(0)},${py(2)} L${px(11.5)},${py(36.5)}`, C.yellow, {sw: 3.5});
+const crvL = Txt(px(6.2), py(20.6) - 34, 'the curve', {size: 28, fill: C.yellow, anchor: 'end'});
+const beyond = Txt(px(7.6), py(8), 'it has a height at every position, even far beyond the rows', {size: 21, fill: C.dim, anchor: 'middle'});
+const zL = [10, 11].map((x, i) => Line(px(x), OY, px(x), py(40), C.blueL, {sw: i ? 1.8 : 2.8, dash: '8 7'}));
+const zT = [10, 11].map((x, i) => Txt(px(x), OY + 30, String(x), {size: i ? 20 : 24, fill: C.blueL, anchor: 'middle'}));
+const ndot = [[10, 32], [11, 35]].map(([x, v]) => Dot(px(x), py(v), C.yellow, {r: 9}));
+const nlab = [[10, 32], [11, 35]].map(([x, v], i) => MChip(px(x) + (i ? 52 : -52), py(v) - 6, String(v), C.yellow, {w: 62, size: 26}));
+const cf = (x) => 3 * x + 2 + x * (x - 1) * (x - 2) / 6;
+const badC = Curve(fpath((x) => py(cf((x - OX) / UX)), px(0), px(5.95)), C.red, {sw: 3.5});
+const badUp = Arrow(px(5.95), py(cf(5.95)), px(6.25), py(46), C.red, {sw: 3.5});
+const badV = [Txt(px(6.9), py(44) + 6, 'at 10:  152', {size: 26, fill: C.red}), Txt(px(6.9), py(44) + 42, 'at 11:  200', {size: 26, fill: C.red})];
+const bends = Txt(px(7.0), py(11), 'one wrong row bends the whole curve', {size: 23, fill: C.red, anchor: 'middle'});
+/* the strip below: fingerprint, position, numbers, check */
+const SY = TY0 + 780;
+const aFp = Arrow(TX0 + 280, CYc(3) + 36, TX0 + 280, SY - 30, C.yellow, {sw: 2.5, head: 10});
+const aFpL = Txt(TX0 + 296, SY - 62, 'hash', {size: 20, fill: C.dim});
+const fpr = MChip(TX0 + 280, SY, 'fingerprint  <c>8f3a…c1</c>', C.yellow, {w: 340, size: 24});
+const fpr2 = MChip(TX0 + 280, SY, 'fingerprint  <c>51d0…7e</c>', C.red, {w: 340, size: 24});
+const fprL = Txt(TX0 + 280, SY + 46, 'the commitment  ·  56 bytes', {size: 20, fill: C.dim, anchor: 'middle'});
+const fprN = ['reveals nothing about the table', 'a different table gives a different fingerprint', 'sent first'].map((s, i) => [Check(TX0 + 640, SY - 26 + 36 * i, C.green, {k: 0.7}), Txt(TX0 + 664, SY - 18 + 36 * i, s, {size: 23})]);
+const aZ = Arrow(TX0 + 456, SY, TX0 + 560, SY, C.blueL, {sw: 2.5, head: 10});
+const aZL = Txt(TX0 + 508, SY - 14, 'hash', {size: 20, fill: C.dim, anchor: 'middle'});
+const zChip = MChip(TX0 + 664, SY, 'position 10', C.blueL, {w: 190, size: 24});
+const zChipL = Txt(TX0 + 664, SY + 46, 'random  ·  not Alice’s choice', {size: 20, fill: C.dim, anchor: 'middle'});
+const nChip = [MChip(TX0 + 880, SY, '32', C.yellow, {w: 62, size: 26}), MChip(TX0 + 954, SY, '35', C.yellow, {w: 62, size: 26})];
+const nChipL = Txt(TX0 + 917, SY + 46, 'the numbers', {size: 20, fill: C.dim, anchor: 'middle'});
+const chkT = Txt(TX0 + 1060, SY + 9, 'the rule:   35 = 32 + 3', {size: 28});
+const chkK = Check(TX0 + 1420, SY, C.green, {k: 1.1});
+const badT = Txt(TX0 + 1060, SY + 56, 'wrong table:   200 ≠ 152 + 3', {size: 26, fill: C.red});
+const badK = Cross(TX0 + 1470, SY + 47, C.red, {k: 0.9});
+/* the gapT, and the opening proof (left column, once the table has left) */
+const gapT = Txt(px(5.7), TY0 + 110, 'but nothing yet ties 32 and 35 to her table', {size: 26, fill: C.red, anchor: 'middle'});
+const opC = Card(TX0 + 60, TY0 + 230, 470, 400, C.purple, {fo: 0.06});
+const opP = Pile(TX0 + 130, TY0 + 310, 5, {w: 56, h: 74, ox: 4, oy: -5, sw: 2, lines: 4});
+const opCT = Txt(TX0 + 190, TY0 + 322, 'opening proof', {size: 32, fill: C.purple});
+const opS = ['evidence that the curve behind', 'her fingerprint really is at 32', 'at position 10'].map((s, i) => Txt(TX0 + 92, TY0 + 410 + 40 * i, s, {size: 26}));
+const opN = [Txt(TX0 + 92, TY0 + 552, 'the cheater cannot make one:', {size: 23, fill: C.red}), Txt(TX0 + 92, TY0 + 586, 'her curve is at 152, not 32', {size: 23, fill: C.red})];
+const TABLE = [tabT, tabLock, tcell, tcell.map((m) => m.v), cellL, plusA, plusL, badCell, badCell.v, badL, ruleC, ruleCT, ruleCS, aFp, aFpL];
+const TOY = [TABLE, axX, axY, axXL, axYL, tkN, tkR, rdot, crv, crvL, zL, zT, ndot, nlab, badC, badUp, badV, bends, fpr, fprL, aZ, aZL, zChip, zChipL, nChip, nChipL, fpr2, chkT, chkK, badT, badK, gapT, opC, opP, opCT, opS, opN];
+
+beat(2, 15, (t) => {                               /* the ruleC and the table */
+  A.fadeOut(S2, t, 0.5); goToy(t);
+  A.draw(ruleC, t + 1.4, 0.8); A.fadeIn(ruleCT, t + 1.7, 0.4); A.write(ruleCS, t + 2.0, 1.0);
+  A.fadeIn(tabT, t + 4.2, 0.5); A.fadeIn(tabLock, t + 4.4, 0.4);
+  tcell.forEach((m, i) => { const tt = t + 5.0 + i * 1.0; A.draw(m, tt, 0.5); A.fadeIn(m.v, tt + 0.2, 0.4); A.fadeIn(cellL[i], tt, 0.4); if (i) { A.draw(plusA[i - 1], tt - 0.5, 0.5); A.fadeIn(plusL[i - 1], tt - 0.3, 0.4); } });
+});
+beat(2, 14, (t) => {                               /* the curve */
+  A.draw([axX, axY], t + 0.4, 0.7); A.fadeIn([axXL, axYL, tkN, tkR], t + 0.9, 0.5);
+  rfly.forEach((m, i) => { const tt = t + 1.8 + i * 0.5; A.fadeIn(m, tt, 0.2); A.to(m, tt + 0.1, 0.9, {x: px(i), y: py(VAL[i])}); A.handoff(m, rdot[i], tt + 1.0, 0.1); A.pulse(tcell[i], tt, 0.5, 1.06); });
+  A.draw(crv, t + 5.0, 1.8); A.fadeIn(crvL, t + 6.2, 0.5);
+  A.fadeIn(beyond, t + 8.2, 0.6, {dy: 8});
+});
+beat(2, 14, (t) => {                               /* the commitment */
+  A.fadeOut(beyond, t, 0.5);
+  A.pulse(tcell, t + 0.6, 0.7, 1.05);
+  A.draw(aFp, t + 1.0, 0.6); A.fadeIn(aFpL, t + 1.3, 0.4);
+  A.fadeIn(fpr, t + 1.8, 0.5, {s0: 0.6}); A.pulse(fpr, t + 2.4, 0.6, 1.08); A.fadeIn(fprL, t + 2.6, 0.5);
+  fprN.forEach((g, i) => { A.draw(g[0], t + 5.0 + i * 2.2, 0.3); A.fadeIn(g[1], t + 5.0 + i * 2.2, 0.5, {dx: -8}); });
+});
+beat(2, 12, (t) => {                               /* the random position */
+  A.fadeOut(fprN, t, 0.5);
+  A.draw(aZ, t + 0.9, 0.5); A.fadeIn(aZL, t + 1.1, 0.4);
+  A.fadeIn(zChip, t + 1.6, 0.5, {s0: 0.6}); A.pulse(zChip, t + 2.2, 0.6, 1.1);
+  A.fadeIn(zL[0], t + 3.0, 0.6); A.fadeIn(zT[0], t + 3.2, 0.4);
+  A.fadeIn(zChipL, t + 5.6, 0.5);
+});
+beat(2, 14, (t) => {                               /* the numbers and the check */
+  A.fadeIn(zL[1], t + 0.6, 0.5); A.fadeIn(zT[1], t + 0.8, 0.4);
+  A.fadeIn(ndot, t + 1.4, 0.3, {lag: 0.5, s0: 0.3}); A.fadeIn(nlab, t + 1.7, 0.4, {lag: 0.5, s0: 0.6});
+  A.fadeIn(nChip, t + 4.0, 0.5, {lag: 0.2, s0: 0.6}); A.fadeIn(nChipL, t + 4.4, 0.5); A.pulse(nlab, t + 4.0, 0.6, 1.15);
+  A.write(chkT, t + 7.0, 1.0); A.draw(chkK, t + 8.2, 0.4);
+});
+beat(2, 15, (t) => {                               /* one wrong row */
+  A.handoff(tcell[3], badCell, t + 2.0, 0.3); A.fadeOut(tcell[3].v, t + 2.0, 0.3); A.fadeIn(badCell.v, t + 2.0, 0.3); A.fadeIn(badL, t + 2.3, 0.4);
+  A.to(rdot[3], t + 2.2, 0.5, {y: py(12)}); A.handoff(fpr, fpr2, t + 2.8, 0.3); A.pulse(fpr2, t + 3.1, 0.6, 1.08);
+  A.to([crv, crvL, ndot, nlab], t + 3.0, 0.6, {o: 0.3});
+  A.draw(badC, t + 3.4, 1.6); A.draw(badUp, t + 4.9, 0.5); A.fadeIn(bends, t + 5.4, 0.5);
+  A.fadeIn(badV, t + 6.8, 0.5, {lag: 0.4});
+  A.write(badT, t + 9.4, 1.0); A.draw(badK, t + 10.6, 0.4);
+});
+beat(2, 17, (t) => {                               /* the gapT, and the opening proof */
+  A.pulse(nChip, t + 1.0, 0.8, 1.2); A.fadeIn(gapT, t + 2.4, 0.6, {dy: 8});
+  A.fadeOut(TABLE, t + 6.4, 0.5);
+  A.draw(opC, t + 7.0, 0.8); A.fadeIn(opP, t + 7.4, 0.5, {s0: 0.6}); A.write(opCT, t + 7.6, 0.8);
+  A.fadeIn(opS, t + 8.6, 0.5, {lag: 0.5, dx: -8}); A.pulse(fpr2, t + 9.2, 0.6, 1.08);
+  A.fadeIn(opN, t + 12.8, 0.5, {lag: 0.4});
+});
+
 /* 3. The proof has two parts */
 const X3 = SX(3);
 const head3 = Txt(X3 + 800, 110, 'one proof, two parts', {size: 40, anchor: 'middle'});
 const all3 = Pile(X3 + 770, 430, 10, {w: 220, h: 260, sw: 2.6, col: C.ink});
 const sp = Card(X3 + 150, 250, 470, 330, C.yellow);
 const spT = CT(sp, 28, 56, 'short proof', {size: 34, fill: C.yellow});
-const spB = CT(sp, 442, 54, '252 bytes', {size: 24, fill: C.dim, anchor: 'end'});
-const spSeal = MC(sp, 78, 132, 'seal', C.yellow, {w: 100, size: 26});
-const spSealL = CT(sp, 146, 141, 'of Alice’s computation', {size: 24});
-const spNum = [MC(sp, 56, 204, '<m>a</m>', C.yellow, {w: 54, size: 26}), MC(sp, 122, 204, '<m>b</m>', C.yellow, {w: 54, size: 26})];
-const spNumL = CT(sp, 168, 213, 'a few numbers taken from it', {size: 24});
-const spWhy = CT(sp, 28, 290, 'checking it = checking the app’s rules', {size: 23, fill: C.dim});
+const spB = CT(sp, 442, 54, 'real one: 252 bytes', {size: 24, fill: C.dim, anchor: 'end'});
+const spSeal = MC(sp, 108, 132, 'fingerprint', C.yellow, {w: 160, size: 26});
+const spSealL = CT(sp, 206, 141, 'of her table', {size: 24});
+const spNum = [MC(sp, 60, 204, '32', C.yellow, {w: 62, size: 26}), MC(sp, 134, 204, '35', C.yellow, {w: 62, size: 26})];
+const spNumL = CT(sp, 184, 213, 'the numbers', {size: 24});
+const spWhy = CT(sp, 28, 290, 'checking it = checking the app’s rule', {size: 23, fill: C.dim});
 const op3 = Pile(X3 + 1130, 420, 10, {w: 220, h: 260, sw: 2.6});
 const op3T = Txt(X3 + 1170, 178, 'opening proofs', {size: 34, anchor: 'middle', fill: C.purple});
-const op3B = Txt(X3 + 1170, 612, '≈ 860 KB', {size: 30, anchor: 'middle', fill: C.purple});
-const op3W = [Txt(X3 + 1170, 664, 'show that the numbers really come', {size: 23, anchor: 'middle', fill: C.dim}),
-              Txt(X3 + 1170, 696, 'from the sealed computation', {size: 23, anchor: 'middle', fill: C.dim})];
+const op3B = Txt(X3 + 1170, 612, 'real ones: ≈ 860 KB', {size: 28, anchor: 'middle', fill: C.purple});
+const op3W = [Txt(X3 + 1170, 664, 'show that the numbers really are', {size: 23, anchor: 'middle', fill: C.dim}),
+              Txt(X3 + 1170, 696, 'heights of her fingerprinted curve', {size: 23, anchor: 'middle', fill: C.dim})];
 const tag3 = [Txt(X3 + 385, 664, 'different for each app', {size: 26, anchor: 'middle', fill: C.yellow}),
               Txt(X3 + 1170, 758, 'the same kind of check for every app', {size: 26, anchor: 'middle', fill: C.purple})];
 const S3 = [head3, all3, sp, spT, spB, spSeal, spSealL, spNum, spNumL, spWhy, op3, op3T, op3B, op3W, tag3];
-beat(2, 19, (t) => {
-  A.fadeOut(S2, t, 0.5); go(t, 3);
+beat(3, 19, (t) => {
+  A.fadeOut(TOY, t, 0.5); go(t, 3);
   A.write(head3, t + 1.4, 1.0);
   A.fadeIn(all3, t + 1.6, 0.6, {s0: 0.8});
   A.to(all3, t + 3.4, 1.2, {x: X3 + 1130, y: 420}); A.handoff(all3, op3, t + 4.5, 0.3);
@@ -671,17 +799,17 @@ const tx4T = CT(tx4, 28, 54, 'transaction', {size: 32});
 const tx4S = CT(tx4, 442, 52, 'on chain', {size: 22, fill: C.dim, anchor: 'end'});
 const tx4P = MC(tx4, 235, 150, 'short proof', C.yellow, {w: 240, size: 28});
 const tx4L = CT(tx4, 28, 260, 'claims it lists', {size: 24, fill: C.blueL});
-const CLM = ['number <m>a</m> is genuine', 'number <m>b</m> is genuine'];
+const CLM = ['at 10, the curve is at 32', 'at 11, the curve is at 35'];
 const tx4C = CLM.map((s, i) => MC(tx4, 235, 320 + 84 * i, s, C.blueL, {w: 350, size: 26}));
 const tx4N = CT(tx4, 235, 500, 'Ethereum must prove every listed claim', {size: 21, fill: C.dim, anchor: 'middle'});
 const ct4 = Card(X4 + 720, 150, 790, 560, C.teal, {fo: 0.05});
 const ct4T = CT(ct4, 28, 54, 'the app’s contract', {size: 32, fill: C.teal});
 const ct4S = CT(ct4, 762, 52, 'run by every node', {size: 22, fill: C.dim, anchor: 'end'});
-const st1 = CT(ct4, 28, 138, '1.  do the numbers satisfy my rules?', {size: 28});
+const st1 = CT(ct4, 28, 138, '1.  do the numbers follow my rule?   35 = 32 + 3', {size: 28});
 const st1k = Check(...at(ct4, 720, 128), C.green, {parent: ct4});
 const st1s = CT(ct4, 72, 178, 'cheap: about 14,000 gas in a measured example', {size: 21, fill: C.dim});
 const st2 = CT(ct4, 28, 262, '2.  are the numbers genuine?  I can’t tell, so I ask:', {size: 28});
-const st2q = [0, 1].map((i) => CT(ct4, 72, 326 + 62 * i, `<c>PCS_OPEN</c>: is “number <m>${'ab'[i]}</m> is genuine” on the list?`, {size: 24}));
+const st2q = [0, 1].map((i) => CT(ct4, 72, 326 + 62 * i, `<c>PCS_OPEN</c>: is “${CLM[i]}” on the list?`, {size: 24}));
 const st2k = [0, 1].map((i) => Check(...at(ct4, 720, 317 + 62 * i), C.green, {parent: ct4}));
 const st3 = CT(ct4, 28, 478, '3.  approve the payment', {size: 28, fill: C.green});
 const st3k = Check(...at(ct4, 720, 468), C.green, {parent: ct4});
@@ -689,7 +817,7 @@ const a4 = Arrow(X4 + 568, 300, X4 + 712, 300, C.yellow);
 const ask4 = [0, 1].map((i) => Flash(`M${X4 + 790},${467 + 62 * i} Q${X4 + 640},${467 + 62 * i} ${X4 + 506},${470 + 84 * i}`, C.blueL, {sw: 5, len: 0.3}));
 const foot4 = Txt(X4 + 800, 792, 'the contract never checks a claim itself: it only checks that the claim is listed', {size: 27, anchor: 'middle'});
 const S4 = [tx4, tx4T, tx4S, tx4P, tx4L, tx4C, tx4N, ct4, ct4T, ct4S, st1, st1k, st1s, st2, st2q, st2k, st3, st3k, a4, foot4];
-beat(3, 18, (t) => {
+beat(4, 18, (t) => {
   A.fadeOut(S3, t, 0.5); go(t, 4);
   A.draw(tx4, t + 1.3, 0.9); A.write(tx4T, t + 1.6, 0.7); A.fadeIn(tx4S, t + 1.9, 0.4); A.fadeIn(tx4P, t + 2.2, 0.5, {s0: 0.6});
   A.draw(ct4, t + 2.8, 0.9); A.write(ct4T, t + 3.1, 0.7); A.fadeIn(ct4S, t + 3.4, 0.4);
@@ -720,7 +848,7 @@ for (const k in NP) bd5[k] = Badge(...B5(k), {k: 0.9});
 const foot5 = [Txt(X5 + 800, 760, 'opening proofs: checked by nodes, never on chain', {size: 28, anchor: 'middle', fill: C.purple}),
                Txt(X5 + 800, 810, 'every second, each node merges those it holds into one small proof, a STARK', {size: 26, anchor: 'middle', fill: C.gold})];
 const S5 = [Object.values(NN), ED, net5, wr5L, chk5, chk5L, Object.values(bd5), foot5];
-beat(4, 15, (t) => {
+beat(5, 15, (t) => {
   A.fadeOut(S4, t, 0.5); go(t, 5);
   A.fadeIn(net5, t + 1.4, 0.6); A.draw(ED, t + 1.6, 0.8, {lag: 0.05}); A.fadeIn(Object.values(NN), t + 1.7, 0.6, {lag: 0.08, s0: 0.5});
   A.fadeIn(wr5, t + 2.6, 0.5); A.fadeIn(wr5L, t + 2.8, 0.5);
@@ -757,7 +885,7 @@ const fl6 = cl6.map((m, i) => { const y = 110 + 248 + 84 * Math.floor(i / 2); re
 const bad6 = [Txt(X6 + 1150, 560, 'a block with a false claim', {size: 28, anchor: 'middle'}), Txt(X6 + 1150, 602, 'is invalid', {size: 28, anchor: 'middle', fill: C.red})];
 const so6 = [Txt(X6 + 1150, 690, 'so a listed claim is as good', {size: 24, anchor: 'middle', fill: C.dim}), Txt(X6 + 1150, 722, 'as a checked one', {size: 24, anchor: 'middle', fill: C.dim})];
 const S6 = [bk, bkT, hd, hdB, hdL, rows6, cl6, vals6, vals6L, vk6, vk6L, bad6, so6];
-beat(4, 16, (t) => {
+beat(5, 16, (t) => {
   A.fadeOut(S5, t, 0.5); go(t, 6);
   A.draw(bk, t + 1.3, 1.0); A.write(bkT, t + 1.6, 0.6);
   A.fadeIn(rows6, t + 2.2, 0.4, {lag: 0.15, dx: -10}); A.fadeIn(cl6, t + 3.2, 0.3, {lag: 0.06, s0: 0.6});
@@ -780,7 +908,7 @@ const alt7 = Card(X7 + 120, 630, 1360, 130, C.grey, {fo: 0.05, sw: 2});
 const alt7T = CT(alt7, 30, 52, 'the alternative: Ethereum checks whole proofs', {size: 27});
 const alt7S = CT(alt7, 30, 96, 'simpler for apps, but each one must be written for a single machine that Ethereum fixes', {size: 24, fill: C.dim});
 const S7 = [ap7, ap7.t, ap7.div, ap7I, et7, et7.t, et7.div, et7I, alt7, alt7T, alt7S];
-beat(5, 18, (t) => {
+beat(6, 18, (t) => {
   A.fadeOut(S6, t, 0.5); go(t, 7);
   A.draw(ap7, t + 1.3, 0.9); A.write(ap7.t, t + 1.6, 0.7); A.draw(ap7.div, t + 1.9, 0.5);
   ap7I.forEach((g, i) => A.fadeIn(g, t + 2.6 + i * 1.1, 0.5, {dx: -8}));
@@ -791,7 +919,7 @@ beat(5, 18, (t) => {
 
 /* 8. Upgrades */
 const X8 = SX(8);
-const head8 = Txt(X8 + 800, 110, 'the seal scheme can be replaced', {size: 40, anchor: 'middle'});
+const head8 = Txt(X8 + 800, 110, 'the fingerprint scheme can be replaced', {size: 40, anchor: 'middle'});
 const tl8 = Arrow(X8 + 200, 470, X8 + 1400, 470, C.faint, {sw: 3, head: 14});
 const vc8 = (x, a, b) => { const m = Card(x, 220, 400, 150, C.purple, {fo: 0.06}); m.a = CT(m, 200, 64, a, {size: 30, fill: C.purple, anchor: 'middle'}); m.b = CT(m, 200, 108, b, {size: 23, fill: C.dim, anchor: 'middle'}); return m; };
 const v81 = vc8(X8 + 260, 'version 1', 'today’s scheme'), v82 = vc8(X8 + 940, 'version 2', 'a better one, years later');
@@ -804,7 +932,7 @@ const fx8K = Lock(...at(fx8, 52, 68), C.ink, {parent: fx8, k: 1});
 const fx8T = CT(fx8, 96, 56, 'fixed for good', {size: 28});
 const fx8S = CT(fx8, 96, 100, 'the kind of numbers used (a binary field)  ·  what a claim means', {size: 24, fill: C.dim});
 const S8 = [head8, tl8, v81, v81.a, v81.b, v82, v82.a, v82.b, fk8, fk8L, app8, app8L, fx8, fx8K, fx8T, fx8S];
-beat(5, 14, (t) => {
+beat(6, 14, (t) => {
   A.fadeOut(S7, t, 0.5); go(t, 8);
   A.write(head8, t + 1.4, 1.0); A.draw(tl8, t + 1.8, 0.9);
   A.draw(v81, t + 2.4, 0.8); A.fadeIn([v81.a, v81.b], t + 2.8, 0.5, {lag: 0.15}); A.fadeIn(app8, t + 3.2, 0.5, {s0: 0.6});
@@ -827,14 +955,14 @@ const rows9 = R9.map(([c, a, b, d], i) => {
   return m;
 });
 const foot9 = Txt(X9 + 800, 790, 'a draft under discussion, not a decision  ·  the simple and detailed versions show each step', {size: 24, anchor: 'middle', fill: C.dim});
-beat(6, 15, (t) => {
+beat(7, 15, (t) => {
   A.fadeOut(S8, t, 0.5); go(t, 9);
   A.write(head9, t + 1.4, 0.8);
   rows9.forEach((m, i) => { const tt = t + 2.2 + i * 2.2; A.draw(m, tt, 0.7); A.write(m.a, tt + 0.3, 0.6); A.fadeIn([m.b, m.c], tt + 0.8, 0.5, {lag: 0.3, dx: -8}); });
   A.fadeIn(foot9, t + 11.6, 0.6, {dy: 8});
 });
 
-const CHAPTERS = [['Problem', 1], ['Split', 2], ['On chain', 3], ['Off chain', 4], ['Why', 5], ['Recap', 6]];
+const CHAPTERS = [['Problem', 1], ['Example', 2], ['Two parts', 3], ['On chain', 4], ['Off chain', 5], ['Why', 6], ['Recap', 7]];
 
 /* ---------------- rendering ---------------- */
 function render(t) {
