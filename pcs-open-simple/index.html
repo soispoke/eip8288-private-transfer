@@ -540,6 +540,7 @@ const CAP = [
   'In its `VERIFY` frame, the pool’s code reads π from the signature field, does its usual checks, recomputes z and checks the equation with `MULFIELD`, a new instruction that multiplies in the binary field. The equation also needs the circuit’s fixed tables at z, too much to compute in the EVM, so the contract stores only their commitment C, and π carries their value c: a second claim, like v.',
   'For each value it can’t check itself, the code builds a claim, here that under PCS version 1 the polynomial behind R has value v at z, and hashes it. It does not check the claim. It checks only that frame 2 declares PCS claims and holds that hash. A valid block proves every claim its transactions declare, so a declared claim is true, and the pool can approve now.',
   'The wallet computed the same z before sending, so it declared exactly these claims and made an opening proof for each. Since z hashes the statement, which the pool ties to this transaction, the claims fit only this transaction, and proofs for other claims fail. The claims are the only link between the pool’s check and the opening proofs.',
+  'What ties π to this transaction? A signature is made over the transaction’s hash, which covers every frame, so it fits no other transaction. A proof cannot simply include that hash: frame 2 lists the claims, and the claims depend on the proof. So the claims move to the signature field, which the hash leaves out, and frame 2 points to them. The proof can then include the hash, and in frame 1 the pool checks that those claims are exactly its own.',
   'Before sending, her wallet merges the opening proofs into one STARK that proves every claim the transaction declares. The two travel together in an EIP-8288 mempool wrapper that never goes on chain. Each node checks the nonce keys, runs the first two frames in the EVM, and checks that one STARK natively against the declared hashes.',
   'Every second, as in EIP-8288, each node merges the STARKs it holds into one recursive STARK, a single proof of every claim they cover, and forwards it with the transactions. The next node checks that one STARK against the claims the transactions declare.',
   'The builder merges them into one final STARK in the header, next to a hash of all the claims its transactions declare. Validators recompute that hash from the transactions, check that the STARK proves exactly that list, run the transactions, and settle Alice’s transfer.',
@@ -554,29 +555,30 @@ const CAP = [
   'Nodes run each contract’s PIOP in their EVM and check the opening proofs outside it, merged recursively from wallet to block. A fork can upgrade the PCS, never a contract’s PIOP.',
 ];
 const NOTE = [
-  'Follows the leanPCS EIP draft in github.com/TomWambsgans/PCS-openings-aggregation (`eip-draft_leanPCS.md`, a work in progress, read at commit d70f3f16 of 2026-11-11): PCS claims declared as EIP-8288 dependencies of EIP-8141 frame transactions, read by contracts through frame introspection (there is no precompile), and a `MULFIELD` instruction. It is applied here to the minimal shielded pool’s transfer, which the draft does not cover; where this page fills a gap or adds a safety rule, the note says so. Measured figures come from that repository’s Keccak Merkle-membership proof. WHIR’s parameters are the reference implementation’s until the draft specifies them.',
+  'Follows the leanPCS EIP draft in github.com/TomWambsgans/PCS-openings-aggregation (`eip-draft_leanPCS.md`, a work in progress, read at commit bb2da7f0 of 2026-11-12): PCS claims declared as EIP-8288 dependencies of EIP-8141 frame transactions, read by contracts through frame introspection (there is no precompile), and a `MULFIELD` instruction. It is applied here to the minimal shielded pool’s transfer, which the draft does not cover; where this page fills a gap or adds a safety rule, the note says so; step 13 is not in the draft. Measured figures come from that repository’s Keccak Merkle-membership proof. WHIR’s parameters are the reference implementation’s until the draft specifies them.',
   'A spend with two inputs and two outputs, the shape the minimal shielded pool uses. Amounts are illustrative.',
-  'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The draft does not say how a proof is tied to its transaction. EIP-8141’s signature hash cannot be part of the statement here: it covers the dependency frame, whose content depends on the point z, and z is a hash of the statement. This page assumes instead that the pool’s code compares the transaction’s nonce keys, frames and gas limits with the statement. Hashes are Keccak-256.',
+  'Commitments hide amounts and owners, and only her key links a nullifier to its note, so no one learns which notes she spent. The draft does not say how a proof is tied to its transaction. Step 13 shows one way. Hashes are Keccak-256.',
   'In proof-system terms the statement is the public input, the witness the private input, and the pool’s rules the relation between them. A nullifier is a hash of the note and her key: the same note always gives the same nullifier, so a second spend is caught, yet no one else can tell which note it belongs to. Zero knowledge means the proof reveals nothing about the witness beyond the fact that a valid one exists.',
   'Under the hood (the detailed version walks through each step): running the circuit fills a table, the trace, read as one polynomial f and committed with a polynomial commitment scheme (PCS, WHIR today). The commitment R is a Merkle root plus one value of f at a point derived from the root, 56 bytes. π holds R and the values of f (and of the circuit’s fixed tables) at one random point z, a hash of the statement and R (Fiat–Shamir), where a wrong trace would fail the PIOP’s equation. Each opening proof, one per claim, shows that the claimed value really is the committed polynomial’s value at z, with Merkle paths to about 200 spots of its encoding, which a hash derives so that nobody chooses them (Fiat–Shamir again; the overview animation works an example). The values in π are public, so the pool’s PIOP must blind them, which is the dApp’s responsibility. Measured for a Keccak Merkle-membership proof in the draft’s repository: 273 bytes sent to the contract, and opening proofs of 276 to 336 KiB, which the wallet merges into one STARK.',
   'The PCS reads each table as a polynomial, a curve through all its values, and commits to it with a Merkle root over a stretched, masked encoding, plus the polynomial’s value at one point derived from the root, which makes the seal fit a single polynomial. If any row is wrong, the circuit’s equation becomes a nonzero polynomial of degree d, which vanishes at no more than d of the 2¹⁹² points of the field: below 2⁻¹⁵⁰ for a random z even for a large circuit (Fiat–Shamir multiplies this by the number of hashes a cheater tries). R is blinded, so its values reveal nothing about Alice’s secrets. C is committed once without hiding, so anyone can recompute it from the published circuit and check that it matches the contract. Here two seals are needed because the fixed tables must come from the pool, not from Alice, and they are too big to evaluate in the EVM; a pool with small, regular tables could compute their value itself and skip C. The random point z is a hash of the statement and R, so Alice cannot choose it.',
-  'Measured for a zero-knowledge Keccak-256 Merkle-membership proof (depth 32) in the draft’s repository: 273 bytes of calldata, 3 claims, one on each of 3 commitments (the witness, the quotient table and the circuit’s wiring, whose commitment is in the contract’s storage), 15,753 gas of EVM execution, opening proofs of 276 to 336 KiB, and 1.0 s of proving on 8 server threads, which the draft rounds up to 1.3 s by adding 0.1 s a claim for merging the openings. The number of claims is the number of values the pool’s equation needs from committed polynomials, one per commitment and point: 3 in the measured proof, two as drawn here. A full pool transfer hashes more than one Merkle path and has not been measured. From this step on, two opening proofs are drawn, one for R and one for C, to keep the diagram simple.',
-  'Frame 0 is EIP-8272’s recent root verifier frame. Frame 2 is an EIP-8288 dependency verification frame: it runs no code, and its data is the byte `PCS_SCHEME` (0x12) followed by one 32-byte Keccak-256 hash per claim. The draft replaces EIP-8288’s dependency triples and its whole-STARK scheme, which needed a verification key. A claim is declared as a hash because the pool’s code computes its point and value itself, so the transaction need not carry them. Gas in the draft: `MULFIELD` costs 10 gas, and a transaction with c claims pays 5,000 + 1,000·c, in both its intrinsic gas and its calldata floor; it may declare at most 256 claims. The measured membership proof costs 20,097 gas for the frame that checks its PIOP and 31,680 in all, 8,000 of it for its 3 claims (its calldata floor binds).',
+  'Measured for a zero-knowledge Keccak-256 Merkle-membership proof (depth 32) in the draft’s repository: 273 bytes of calldata, 3 claims, one on each of 3 commitments (the witness, the quotient table and the circuit’s wiring, whose commitment is in the contract’s storage), 15,753 gas of EVM execution, opening proofs of 276 to 336 KiB, and 1.7 s of proving on an Apple M4 Max in the draft’s table, which counts 0.1 s a claim for merging the openings. The number of claims is the number of values the pool’s equation needs from committed polynomials, one per commitment and point: 3 in the measured proof, two as drawn here. A full pool transfer hashes more than one Merkle path and has not been measured. From this step on, two opening proofs are drawn, one for R and one for C, to keep the diagram simple.',
+  'Frame 0 is EIP-8272’s recent root verifier frame. Frame 2 is an EIP-8288 dependency verification frame: it runs no code, and its data is the byte `PCS_SCHEME` (0x12) followed by one 32-byte Keccak-256 hash per claim. The draft replaces EIP-8288’s dependency triples and its whole-STARK scheme, which needed a verification key. A claim is declared as a hash because the pool’s code computes its point and value itself, so the transaction need not carry them. Gas in the draft: `MULFIELD` costs 10 gas, and a transaction with c claims pays 5,000 + 1,000·c, in both its intrinsic gas and its calldata floor; it may declare at most 256 claims. The measured membership proof costs 20,085 gas for the frame that checks its PIOP and 31,680 in all, 8,000 of it for its 3 claims (its calldata floor binds).',
   'π travels as the bytes of an EIP-8141 `ARBITRARY` signature, which the pool reads with `SIGDATACOPY`. This is a choice of this page; a contract can also take its proof as call data. EIP-8250 consumes all of a transaction’s nonce keys at payment approval, and a key at sequence 0 can be consumed only once.',
   'The pool’s `VERIFY` code runs in the EVM of every node that handles the transaction: mempool nodes when they admit it, the builder, and every validator when it executes the block. Its usual checks: the nonce keys at sequence 0, that the root comes from its own root source, the fee, and the transaction’s frames and gas limits. The fixed tables (in PLONK terms, the selector and wiring polynomials) are the same for every proof, so they are committed once, without hiding, and the contract stores C; evaluating them at z would take work in proportion to their size. C sits in storage rather than in the code so that it can move to a later PCS version (last chapter), as in the repository’s contract. `MULFIELD` (opcode `0x1f`, 10 gas) multiplies two elements of E, 24 bytes each; adding them is `XOR`.',
   'A claim is `version || n || commitment || point || value`: 82 + 24·n bytes, with the 56-byte commitment and 24-byte field elements. The pool’s code hashes it with Keccak-256 and makes the draft’s three checks: `FRAMEPARAM` shows that frame 2 is a dependency verification frame, `FRAMEDATALOAD` shows that its first byte is `PCS_SCHEME`, and the hash sits at the expected place in its data. The first two matter: the same 32 bytes in another frame, or in a frame of signatures, prove nothing. The pool, as sender, pays for every declared claim, so it should also check that the frame declares only its own (a check this page adds). Here π is the proof the pool checks, and v, c the claimed values.',
-  'Each opening proof’s Fiat–Shamir transcript starts from the claim’s Keccak-256 hash, so it proves that claim and no other. The pool’s transcript derives z from the statement and the proof bytes before it, and the pool’s code ties the statement to the transaction, so a claim made for one transaction is useless for another; the opening proof itself needs no binding, since reusing it for an identical claim only proves a true statement again. The wallet computes the claims before signing, because their hashes are part of the transaction. The two transcripts, the pool’s and the opening proof’s, are separate, so the draft requires the pool’s transcript to fix its commitments before it draws the points it claims at, as here: z is drawn after R. That the two checks are secure together has not been formally analyzed.',
+  'Each opening proof’s Fiat–Shamir transcript starts from the claim’s Keccak-256 hash, so it proves that claim and no other. The pool’s transcript derives z from the statement and the proof bytes before it, and the pool’s code ties the statement to the transaction, so a claim made for one transaction is useless for another; the opening proof itself needs no binding, since reusing it for an identical claim only proves a true statement again. The wallet computes the claims before signing, because their hashes are part of the transaction. The two transcripts, the pool’s and the opening proof’s, are separate, so the pool’s transcript must fix its commitments before it draws the points it claims at, as here: z is drawn after R. That the two checks are secure together has not been formally analyzed.',
+  'The hash is EIP-8141’s signature hash. It covers the data of every frame, but not the bytes of a signature entry such as the one that carries π: only their length. The claim hashes go in a second signature entry, and frame 2 holds two bytes that point to it, so nodes and the block’s STARK find the claims as before. In frame 1 the pool’s code reads the signature hash, and checks that the entry holds exactly the hashes of its own claims: the hash no longer covers them, so without this check someone could replace them with other true claims, and a later call would fail while the payer still pays. Cost: about 164 gas more per transaction.',
   'A mode 1 wrapper carries the transaction and one STARK, which her wallet makes by merging the opening proofs of all its claims. A node checks that STARK against the hashes the transaction declares, so, as in EIP-8288, it checks proofs without running any frame, whatever the number of claims. It also validates the transaction as EIP-8141 requires, which runs the `VERIFY` frames. PCS claims travel only in mode 1 wrappers: a mode 0 wrapper would make each node check one opening per claim. The draft’s benchmarks count 0.1 s of proving per claim for this merge. A STARK that fails condemns only the wrapper and the peer that sent it.',
   '`AGGREGATION_INTERVAL` = 1000 ms, as in EIP-8288 (whether every node merges every second or only specialized nodes do is an open networking question). The recursive STARK takes the STARKs it merges as witnesses and proves every dependency they cover; for a claim, that its encoding hashes to the declared dependency and that its opening proof verifies.',
   'Header field `recursive_stark` = [stark_proof, block_deps_hash], as in EIP-8288. In the draft a dependency is `scheme || payload`, and `get_deps_hash` is the Keccak-256 of the sorted, deduplicated list. Block validity: the dependencies read from the transactions hash to `block_deps_hash`, the STARK verifies against it, and every transaction is valid. A claim that is false or badly formed cannot be proven, so a transaction that declares one cannot be included.',
   'Each immutable contract freezes its own circuit, PIOP verifier, Keccak transcript and zero-knowledge masking, which no fork can patch; their soundness and zero knowledge are the dApp’s responsibility. For the membership proof, knowledge soundness, completeness and zero knowledge (under two hypotheses) are proved in Lean for an earlier version of the protocol, not yet for the current one, and the contract is proved to be that verifier. The split follows an estimate that the PCS is about 95% of a STARK’s cost. The draft keeps EIP-8288’s leanSPHINCS signatures and replaces its whole-STARK scheme with `PCS_SCHEME`; one recursive STARK proves both.',
   'In the draft every claim starts with its version byte, and a fork can add version v + 1; the repository’s README has version v removed after about a year. A contract can read the version from the proof, so that its code accepts any supported version.',
-  'Fixed polynomials such as circuit tables are public and committed once, without hiding. From the draft: removing a PCS version makes unmigrated commitments unusable, for example commitments hardcoded in contract code.',
+  'Fixed polynomials such as circuit tables are public and committed once, without hiding. From an earlier version of the draft: removing a PCS version makes unmigrated commitments unusable, for example commitments hardcoded in contract code.',
   'From the draft’s rationale: the contract derives r from both commitments by Fiat–Shamir and requires its transaction to declare two claims, (v, C₁, r, y) and (v + 1, C₂, r, y), with the same y. Both commitments must describe a table of the same size. Schwartz–Zippel: two different multilinear polynomials in n variables agree at a uniformly random point of Eⁿ with probability at most n/|E|. With n ≤ 32 and |E| = 2¹⁹², this is below 2⁻¹⁸⁷ per attempt (for a one-variable polynomial of degree d, as plotted, d/|E|); the check as a whole is as sound as the two opening proofs it trusts.',
   'The migration is an ordinary transaction: it declares the two claims in a dependency frame, its sender merges their opening proofs into one STARK for the mempool wrapper, and it calls the pool, which checks that both claims are declared and stores C₂. The draft migrates the stored commitment; this page keeps a set and only adds to it (next step). A later proof names the commitment it uses, and the pool checks that it is in the set.',
   'Add, never replace (a rule from a review of the design, not in the draft): the check shows that C₂ holds the same polynomial, not that anyone else can open it. If a migration replaced the stored commitment, a caller could go first with a commitment only it can open, for example one whose codeword has a flipped symbol that queries almost never reach, and lock out honest provers; with a set, anyone can still add a commitment that everyone can open. One polynomial per commitment: a commitment bound to a list of polynomials could pass the check as the real circuit and later open as a forged one; the draft’s out-of-domain answer prevents this. Version 1 sound: the check trusts version 1’s opening proofs, so moving after a break is unsafe, and once version 1 is removed an unmoved commitment is unusable.',
-  'The binary fields are K = GF(2⁶⁴) for data and E = GF(2¹⁹²) for points and values. GF(2ᵃ) embeds in GF(2ᵇ) when a divides b, so a later version over a field whose degree is a multiple of 192 can still serve today’s claims. The draft chose 192 bits because the reference parameters reach about 128 bits of security, which a 128-bit field could not. Each immutable contract also freezes its own circuit, PIOP verifier, transcript and zero-knowledge masking.',
-  'On chain per transfer: the transaction, with π in its signature field and 32 bytes per declared claim in its dependency frame. Off chain: the witness and the opening proofs, which stay in the wallet, and the wallet’s one STARK, which stays in the mempool until it is merged.',
+  'The binary fields are K = GF(2⁶⁴) for data and E = GF(2¹⁹²) for points and values. GF(2ᵃ) embeds in GF(2ᵇ) when a divides b, so a later version over a field whose degree is a multiple of 192 can still serve today’s claims. The draft first chose 192 bits because the reference parameters reach about 128 bits of security, which it said a 128-bit field could not. It now warns that GF(2¹⁹²) will soon be replaced by GF(2¹²⁸), which would shorten every point, value and commitment shown here. Each immutable contract also freezes its own circuit, PIOP verifier, transcript and zero-knowledge masking.',
+  'On chain per transfer: the transaction, with π in its signature field and 32 bytes per declared claim in its dependency frame. Off chain: the witness and the opening proofs, which stay in the wallet, and the wallet’s one STARK, which stays in the mempool until it is merged. After step 13, the claim hashes sit in a second signature entry and the dependency frame holds two bytes.',
   'Compare the EIP-8288 program-scheme version of this transfer on this site’s main page.',
 ];
 /* The aggregate STARK: a gold rounded badge, so it never looks like the proof π. */
@@ -588,6 +590,76 @@ function Badge(x, y, o = {}) {
   shape(m, rr(-w / 2, -h / 2, w, h, 11 * k), {stroke: C.gold, sw: 2.8, fill: C.gold, fo: 0.2, draw: false});
   rich(m.inner, 0, 7.6 * k, '<b>STARK</b>', {size: 21 * k, fill: C.gold, anchor: 'middle'});
   return m;
+}
+
+/* What ties a proof to its transaction. A transaction card shows what the transaction's
+   hash covers, a ring of four boxes shows the circle, and the claim hashes then move to a signature entry. */
+function tieScene(X0, Y0, L) {
+  const S = {};
+  S.head = Txt(X0 + 800, Y0 + 84, L.head, {size: 38, anchor: 'middle'});
+  /* the transaction, and the part its hash covers */
+  const n = L.rows.length, RY = (k) => 300 + 72 * k;
+  const tx = S.tx = Card(X0 + 60, Y0 + 130, 600, 346 + 72 * n, C.ink, {fo: 0.03});
+  S.txT = CT(tx, 28, 52, L.txT, {size: 30});
+  S.sigL = CT(tx, 28, 98, L.sigLbl, {size: 20, fill: C.dim});
+  S.sigNo = CT(tx, 574, 98, L.sigNo, {size: 19, fill: C.green, anchor: 'end'});
+  S.e0 = [CBox(tx, 20, 112, 560, 62, C.faint), CT(tx, 40, 151, '0', {size: 22, fill: C.dim}),
+          MC(tx, 150, 143, L.proof, C.yellow, {w: 160, size: 22}), CT(tx, 246, 151, L.proofSub, {size: 19, fill: C.dim})];
+  S.e1 = CBox(tx, 20, 182, 560, 62, C.blueL);
+  S.e1i = CT(tx, 40, 221, '1', {size: 22, fill: C.dim});
+  S.restL = CT(tx, 28, 284, L.restLbl, {size: 20, fill: C.dim});
+  S.rows = L.rows.map(([idx, chip, col, text], k) => [CBox(tx, 20, RY(k), 560, 62, C.faint), CT(tx, 40, RY(k) + 39, idx, {size: 22, fill: C.dim}),
+    ...(chip ? [CChip(tx, 134, RY(k) + 31, chip, col, {w: 124, size: 18})] : []), ...(text ? [CT(tx, chip ? 210 : 72, RY(k) + 39, text, {size: 20})] : [])]);
+  const cy0 = RY(L.claimRow) + 31;
+  S.cl = L.claims.map((s, i) => MC(tx, L.claimX[i], cy0, s, C.blueL, {w: L.chipW, size: 20}));
+  S.moved = CT(tx, L.movedX, cy0 + 8, L.moved, {size: 20, fill: C.blueL});
+  /* what a frame does once the claims have moved: [row, new text], shown when the contract's check is stated */
+  S.after = L.after ? CT(tx, 210, RY(L.after[0]) + 39, L.after[1], {size: 20, fill: C.teal}) : null;
+  const hb = 72 * n + 74;
+  S.band = new M(...at(tx, 300, 262 + hb / 2), tx, 0);
+  shape(S.band, rr(-290, -hb / 2, 580, hb, 12), {stroke: C.yellow, sw: 2, dash: '8 6', fill: C.yellow, fo: 0.06});
+  S.cover = CT(tx, 300, 322 + 72 * n, L.cover, {size: 20, fill: C.yellow, anchor: 'middle'});
+  /* the circle: four boxes, read clockwise from the top */
+  const RX = X0 + 1130, RC = Y0 + 400, NW = 270, NH = 60, hx = NW / 2 + 8, hy = NH / 2 + 8;
+  const NP = [[RX, RC - 210], [RX + 255, RC], [RX, RC + 210], [RX - 255, RC]];
+  const NC = [C.blue, C.yellow, C.blueL, C.ink];
+  S.n = L.n.map((s, i) => MChip(NP[i][0], NP[i][1], s, NC[i], {w: NW, h: NH, size: 23, tc: C.ink}));
+  S.n2b = MChip(NP[2][0], NP[2][1], L.n2b, C.blueL, {w: NW, h: NH, size: 23, tc: C.ink});
+  const AP = [[NP[0][0] + hx, NP[0][1], NP[1][0], NP[1][1] - hy], [NP[1][0], NP[1][1] + hy, NP[2][0] + hx, NP[2][1]],
+              [NP[2][0] - hx, NP[2][1], NP[3][0], NP[3][1] + hy], [NP[3][0], NP[3][1] - hy, NP[0][0] - hx, NP[0][1]]];
+  S.ar = AP.map((p) => Arrow(...p, C.dim, {bend: -36}));
+  const AL = [[RX + 262, RC - 118, 'start'], [RX + 262, RC + 132, 'start'], [RX - 262, RC + 132, 'end'], [RX - 262, RC - 118, 'end']];
+  S.al = L.a.map((s, i) => Txt(AL[i][0], AL[i][1], s, {size: 20, fill: C.dim, anchor: AL[i][2]}));
+  S.al3b = Txt(AL[3][0], AL[3][1], L.a3b, {size: 20, fill: C.green, anchor: 'end'});
+  S.circ = [Txt(RX, RC - 4, L.circle, {size: 34, fill: C.red, anchor: 'middle'}), Txt(RX, RC + 34, L.circleSub, {size: 20, fill: C.dim, anchor: 'middle'})];
+  S.cut = [Txt(RX, RC - 4, L.cut, {size: 34, fill: C.green, anchor: 'middle'}), Txt(RX, RC + 34, L.cutSub, {size: 20, fill: C.dim, anchor: 'middle'})];
+  S.cutLine = new M(0, 0, null, 0);
+  shape(S.cutLine, S.ar[2].pathD, {stroke: C.faint, sw: 2.5, dash: '6 8'});
+  S.gone = Txt(AL[2][0], AL[2][1], L.gone, {size: 20, fill: C.green, anchor: 'end'});
+  S.then = [Txt(RX, Y0 + 740, L.then1, {size: 23, anchor: 'middle'}), Txt(RX, Y0 + 780, L.then2, {size: 23, fill: C.teal, anchor: 'middle'})];
+  S.all = [S.head, S.tx, S.n, S.n2b, S.ar, S.al, S.al3b, S.circ, S.cut, S.cutLine, S.gone, S.then];
+  S.play = (t) => {
+    A.write(S.head, t + 1.4, 1.0);
+    A.draw(tx, t + 1.8, 0.9); A.write(S.txT, t + 2.1, 0.6);
+    A.fadeIn([S.sigL, S.e0], t + 2.6, 0.4, {lag: 0.1});
+    A.fadeIn(S.restL, t + 3.4, 0.4); A.fadeIn(S.rows, t + 3.6, 0.35, {lag: 0.06, dx: -8});
+    A.fadeIn(S.cl, t + 4.8, 0.4, {lag: 0.2, s0: 0.6});
+    A.fadeIn(S.band, t + 6.0, 0.6); A.fadeIn(S.cover, t + 6.4, 0.5);
+    [0, 1, 2, 3].forEach((i) => { const tt = t + 8.2 + i * 1.5; A.fadeIn(S.n[i], tt, 0.4, {s0: 0.7}); A.draw(S.ar[i], tt + 0.6, 0.6); A.fadeIn(S.al[i], tt + 0.8, 0.4); });
+    A.fadeIn(S.circ, t + 14.6, 0.5, {lag: 0.4});
+    /* the claim hashes move to a second signature entry */
+    const f = t + 17.2;
+    A.draw(S.e1, f + 1.0, 0.6); A.fadeIn(S.e1i, f + 1.2, 0.4);
+    S.cl.forEach((m, i) => { const [x, y] = at(tx, L.claimTo[i], 213); A.to(m, f + 1.8 + i * 0.3, 1.2, {x, y}); });
+    A.fadeIn(S.moved, f + 3.2, 0.5, {dx: -8}); A.fadeIn(S.sigNo, f + 3.4, 0.5);
+    A.fadeOut([S.ar[2], S.al[2]], f + 4.2, 0.4); A.fadeIn([S.cutLine, S.gone], f + 4.5, 0.5);
+    A.handoff(S.n[2], S.n2b, f + 4.2, 0.4);
+    A.fadeOut(S.circ, f + 4.6, 0.4); A.fadeIn(S.cut, f + 5.0, 0.5, {lag: 0.3});
+    A.handoff(S.al[3], S.al3b, f + 6.0, 0.4);
+    A.fadeIn(S.then[0], f + 6.4, 0.6, {dy: 8}); A.fadeIn(S.then[1], f + 8.0, 0.6, {dy: 8});
+    if (S.after) A.handoff(S.rows[L.after[0]][3], S.after, f + 8.0, 0.4);
+  };
+  return S;
 }
 
 /* ---------------- the scenes ---------------- */
@@ -1109,6 +1181,28 @@ beat(2, 17, (t) => {
   A.fadeIn(lkCmp, t + 11.0, 0.5, {lag: 0.2});
 });
 
+/* 11c. Transaction: the claim hashes move to a signature entry, so the proof can commit to its transaction */
+const TIE = tieScene(7100, 1050, {
+  head: 'What ties the proof to this transaction?',
+  txT: 'her transaction', sigLbl: 'signature field', sigNo: 'left out of the hash',
+  proof: 'proof <m>π</m>', proofSub: 'read by the pool’s code',
+  restLbl: 'frames',
+  rows: [['0', 'VERIFY', C.green, 'recent root'], ['1', 'VERIFY', C.green, 'the pool approves'], ['2', 'DEP_VERIFY', C.blueL, ''], ['3', 'SENDER', C.blue, 'add the new notes']],
+  claimRow: 2, claims: ['claim on <m>R</m>', 'claim on <m>C</m>'], claimX: [302, 484], chipW: 170, claimTo: [190, 400],
+  moved: 'points to entry 1', movedX: 210, after: [1, 'the pool checks entry 1, then approves'],
+  cover: 'covered by the transaction’s hash, which a signature signs',
+  n: ['proof <m>π</m>', 'its claims', 'the claims in frame 2', 'the transaction’s hash'], n2b: 'the claims in entry 1',
+  a: ['decides', 'are listed in', 'is covered by', 'would be in'], a3b: 'can now be in',
+  circle: 'a circle', circleSub: 'nothing can come first', cut: 'no circle', cutSub: 'the hash skips entry 1', gone: 'no longer covered',
+  then1: 'the proof can now include the transaction’s hash, as a signature signs it',
+  then2: 'in frame 1, the pool checks that the claims in entry 1 are exactly its own',
+});
+beat(2, 27, (t) => {
+  A.cam(t + 0.2, 2.2, {cx: 7900, cy: 1500});
+  A.fadeOut([clm, ...LINK], t + 2.6, 0.3);
+  TIE.play(t);
+});
+
 /* 12. Transaction: what changes from EIP-8288 */
 const TA = 6100, TB = 6680, TL0 = 5800, TR = 7290, CA = 6380, CB = 6980;
 const tbHead = [Txt(CA, 1098, 'EIP-8288 as written', {size: 34, anchor: 'middle', fill: C.dim}), Txt(CB, 1098, 'with PCS claims', {size: 34, anchor: 'middle', fill: C.yellow})];
@@ -1166,7 +1260,7 @@ const npZK1 = CT(nPanel, 22, 356, 'her opening proofs never leave the wallet; th
 const npZK2 = CT(nPanel, 22, 378, '(her data is masked before committing, as the draft assumes)', {size: 16, fill: C.dim});
 const dimmed = [N.B, N.C, N.D, N.E, N.F, N.G, ...EDGES, mpLbl];
 beat(3, 19.5, (t) => {
-  A.fadeOut([pool, clm, big1, big2, ...LINK], t + 0.3, 0.6);
+  A.fadeOut([pool, clm, big1, big2, ...LINK, TIE.all], t + 0.3, 0.6);
   A.cam(t, 2.4, {cx: 7300, cy: 450});
   A.fadeIn(bigW, t + 1.8, 0.8); A.fadeIn(bigWL, t + 2.4, 0.6, {dy: 10});
   A.pulse(bwPile, t + 3.4, 0.8, 1.08);
