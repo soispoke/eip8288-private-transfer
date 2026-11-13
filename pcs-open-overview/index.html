@@ -542,10 +542,10 @@ const CAP = [
   'Each shown value is then tested against the claim: does it fit a curve that is at 32 at position 10? Alice’s real values do. A cheater’s do not: the curve under her fingerprint is at 152 there, and two different curves disagree at most positions, so many spots fail. Nobody has to be trusted to run this test. It is a fixed recipe of hashing and arithmetic that anyone holding the proof can follow.',
   'Why is it big? Each spot, shown with its chain of hashes, costs about a kilobyte. A few hundred spots, plus a few extra rounds that check the values really lie on one curve, add up to about 300 KB. Today’s small proofs use elliptic curves, which quantum computers would break. Hashes stay safe, but a hash proves nothing until you reveal what is under it, so you pay in spot checks.',
   'So a proof has two parts. The short one is the fingerprint and the numbers: checking it means checking the app’s own rule. The long one is the opening proofs, which only show that the numbers really belong to the fingerprinted table. That check is the same for every app, and it is where almost all the bytes are.',
-  'So the short proof goes in the transaction, and the app’s contract checks it cheaply. The contract cannot tell whether the numbers are genuine. Instead, the transaction lists a claim for each number, and the contract checks that each claim it relies on is on that list.',
+  'So the short proof goes in the transaction, where a signature would normally go. Alice does not sign, since a signature would show who is paying: the app’s contract accepts the transaction once it has checked the proof, which is cheap. But it cannot tell whether the numbers are genuine. Instead, the transaction lists a claim for each number, and the contract checks that each claim it relies on is on that list.',
   'The opening proofs never go on chain, and never even leave the wallet. Alice’s wallet merges them into one small proof, called a STARK, that travels beside the transaction. Nodes check it directly, outside any contract, and every second they merge the STARKs they hold into one.',
   'A block carries one such proof, covering every claim of every transaction in it, whatever the app. Validators check that single proof. A block with a false claim is invalid, which is why the contract could rely on the list without checking the claims itself.',
-  'One gap is left: nothing ties Alice’s proof to her transaction, so anyone could copy it into another. A signature avoids this because it signs a hash of the whole transaction. A proof cannot include that hash: it covers the list of claims, and the claims depend on the proof. So the list moves to the part of the transaction that the hash leaves out. The proof can then include the hash, and the contract checks that the list is its own.',
+  'One gap is left: nothing ties Alice’s proof to her transaction, so anyone could copy it into another. A signature is tied by signing a hash of the transaction. Nobody signs here, so the proof must include that hash itself. It cannot while the hash covers the list of claims, which depend on the proof. So the list moves beside the proof, where a signature would go and the hash does not reach. The contract then checks that the list is its own.',
   'This split gives each side the job it does best. Apps keep their own rules and their own proof design. Ethereum takes over the heavy, generic part, most of the cost of checking a proof, once per block for everyone. The alternative, checking whole proofs, needs every app to be written for one machine that Ethereum fixes.',
   'The scheme behind the fingerprints can be replaced later: a fork adds a new version, and apps move over without changing their code. What contracts depend on for good is small: the kind of numbers used, and what a claim means.',
   'In short: the app’s contract checks a short proof and relies on claims, while the heavy opening proofs are merged into one proof, first by the wallet, then once per block. This is a draft under discussion. The simple and detailed versions show each step.',
@@ -568,8 +568,8 @@ const NOTE = [
   'Measured in the draft repository’s example, a zero-knowledge proof of Keccak-256 Merkle membership: the short part is 273 bytes (the public values, two commitments’ roots, six numbers and the index of the frame of claims) and the three opening proofs are about 890 KiB together. The short part is the commitment plus the PIOP’s values; together with the opening proofs it forms a STARK.',
   'Each claim says: under this version of the scheme, the polynomial behind this commitment has this value at this point. The transaction declares each claim as a 32-byte Keccak-256 hash in an EIP-8288 dependency frame. There is no precompile: the contract hashes the claim it needs and finds the hash in that frame through EIP-8141’s frame introspection (`FRAMEPARAM`, `FRAMEDATALOAD`). The contract checks its equation with `MULFIELD`, a new instruction that multiplies in a binary field. A transaction pays 5,000 gas plus 1,000 per claim. Measured for the membership proof: 20,085 gas for the frame that checks the short proof, 31,680 in all with its 3 claims.',
   'The wallet merges the opening proofs of all its claims into one STARK, and the transaction travels with it in an EIP-8288 mode 1 mempool wrapper, so nodes check one STARK per transaction, however many claims it has. The draft’s benchmarks count 0.1 s of proving per claim for this merge. Every second (`AGGREGATION_INTERVAL` = 1000 ms) nodes merge the STARKs they hold into a recursive STARK. The draft names its scheme ZK-WHIR: the wallet masks its data before committing, so that nothing reveals the payment. The reference implementation’s openings are not masked yet.',
-  'The block header carries one recursive STARK and a hash of every claim the block’s transactions declare, as in EIP-8288. Validators recompute that hash from the transactions and check the STARK against it. The same proof also covers the post-quantum signatures EIP-8288 aggregates.',
-  'In an EIP-8141 frame transaction, the hash is the signature hash. It covers the data of every frame, including the EIP-8288 dependency frame that lists the claims, but not the bytes of a signature entry, which is where a custom scheme puts its proof. The claims’ hashes go in such an entry too, and the dependency frame points to it. Because the hash no longer covers them, the contract must check, in its own frame, that the entry holds exactly the hashes of its own claims.',
+  'The block header carries one recursive STARK and a hash of every claim the block’s transactions declare, as in EIP-8288. Validators recompute that hash from the transactions and check the STARK against it. The same proof also covers the post-quantum signatures of other transactions, which EIP-8288 aggregates.',
+  'Alice’s transaction carries no signature: the app’s contract approves it once the proof checks. For readers who know Ethereum’s frame transactions (EIP-8141), which the simple and detailed versions show: the hash is called the signature hash, because it is what a signature would sign. It covers the data of every frame, including the EIP-8288 dependency frame that lists the claims, but not the bytes of a signature entry. Despite the name, such an entry can hold raw bytes on which the protocol checks no signature, and it is where a custom scheme puts its proof. The claims’ hashes go in such an entry too, and the dependency frame points to it. Because the hash no longer covers them, the contract must check, in its own frame, that the entry holds exactly the hashes of its own claims, in order.',
   'That the commitment scheme is about 95% of the cost of checking a proof is an estimate, not a measurement. Each app is responsible for the soundness and zero knowledge of its own short proof, which no fork can patch once its contract is immutable. The alternative is aggregating whole proofs, which EIP-8288 was first designed for and which needs Ethereum to fix an instruction set, such as RISC-V, that every proven program is written for. Which of the two Ethereum should adopt is not decided.',
   'The commitment scheme is WHIR today. Every claim names a version, a fork adds the next one and removes the old one after a deprecation period, and an app’s contract moves the commitment to its fixed data by checking that the old and new commitments give the same value at a random position. Fixed for good: the binary field (64-bit data, 192-bit points and values, which the draft plans to shorten to 128 bits before it is final), `MULFIELD` and the meaning of a claim.',
   'Still open: a full specification of the commitment scheme (until then its parameters are the reference implementation’s), a security proof of the two checks together, and how an app ties a proof to its transaction (step 19 shows one way).',
@@ -594,6 +594,7 @@ function tieScene(X0, Y0, L) {
   const n = L.rows.length, RY = (k) => 300 + 72 * k;
   const tx = S.tx = Card(X0 + 60, Y0 + 130, 600, 346 + 72 * n, C.ink, {fo: 0.03});
   S.txT = CT(tx, 28, 52, L.txT, {size: 30});
+  S.noSig = CT(tx, 574, 52, L.noSig, {size: 20, fill: C.teal, anchor: 'end'});
   S.sigL = CT(tx, 28, 98, L.sigLbl, {size: 20, fill: C.dim});
   S.sigNo = CT(tx, 574, 98, L.sigNo, {size: 19, fill: C.green, anchor: 'end'});
   S.e0 = [CBox(tx, 20, 112, 560, 62, C.faint), CT(tx, 40, 151, '0', {size: 22, fill: C.dim}),
@@ -634,7 +635,7 @@ function tieScene(X0, Y0, L) {
   S.play = (t) => {
     A.write(S.head, t + 1.4, 1.0);
     A.draw(tx, t + 1.8, 0.9); A.write(S.txT, t + 2.1, 0.6);
-    A.fadeIn([S.sigL, S.e0], t + 2.6, 0.4, {lag: 0.1});
+    A.fadeIn([S.sigL, S.e0], t + 2.6, 0.4, {lag: 0.1}); A.fadeIn(S.noSig, t + 3.0, 0.5, {dx: 8});
     A.fadeIn(S.restL, t + 3.4, 0.4); A.fadeIn(S.rows, t + 3.6, 0.35, {lag: 0.06, dx: -8});
     A.fadeIn(S.cl, t + 4.8, 0.4, {lag: 0.2, s0: 0.6});
     A.fadeIn(S.band, t + 6.0, 0.6); A.fadeIn(S.cover, t + 6.4, 0.5);
@@ -1016,6 +1017,7 @@ const tx4 = Card(X4 + 90, 150, 470, 560, C.ink, {fo: 0.03});
 const tx4T = CT(tx4, 28, 54, 'transaction', {size: 32});
 const tx4S = CT(tx4, 442, 52, 'on chain', {size: 22, fill: C.dim, anchor: 'end'});
 const tx4P = MC(tx4, 235, 150, 'short proof', C.yellow, {w: 240, size: 28});
+const tx4G = CT(tx4, 235, 208, 'no signature: Alice does not sign', {size: 21, fill: C.teal, anchor: 'middle'});
 const tx4L = CT(tx4, 28, 260, 'claims it lists', {size: 24, fill: C.blueL});
 const CLM = ['at 10, the curve is at 32', 'at 11, the curve is at 35'];
 const tx4C = CLM.map((s, i) => MC(tx4, 235, 320 + 84 * i, s, C.blueL, {w: 350, size: 26}));
@@ -1034,10 +1036,11 @@ const st3k = Check(...at(ct4, 720, 468), C.green, {parent: ct4});
 const a4 = Arrow(X4 + 568, 300, X4 + 712, 300, C.yellow);
 const ask4 = [0, 1].map((i) => Flash(`M${X4 + 790},${467 + 62 * i} Q${X4 + 640},${467 + 62 * i} ${X4 + 506},${470 + 84 * i}`, C.blueL, {sw: 5, len: 0.3}));
 const foot4 = Txt(X4 + 800, 792, 'the contract never checks a claim itself: it only checks that the claim is listed', {size: 27, anchor: 'middle'});
-const S4 = [tx4, tx4T, tx4S, tx4P, tx4L, tx4C, tx4N, ct4, ct4T, ct4S, st1, st1k, st1s, st2, st2q, st2k, st3, st3k, a4, foot4];
-beat(4, 18, (t) => {
+const S4 = [tx4, tx4T, tx4S, tx4P, tx4G, tx4L, tx4C, tx4N, ct4, ct4T, ct4S, st1, st1k, st1s, st2, st2q, st2k, st3, st3k, a4, foot4];
+beat(4, 21, (t) => {
   A.fadeOut(S3, t, 0.5); go(t, 4);
   A.draw(tx4, t + 1.3, 0.9); A.write(tx4T, t + 1.6, 0.7); A.fadeIn(tx4S, t + 1.9, 0.4); A.fadeIn(tx4P, t + 2.2, 0.5, {s0: 0.6});
+  A.fadeIn(tx4G, t + 3.0, 0.5, {dy: -6});
   A.draw(ct4, t + 2.8, 0.9); A.write(ct4T, t + 3.1, 0.7); A.fadeIn(ct4S, t + 3.4, 0.4);
   A.draw(a4, t + 3.8, 0.6);
   A.fadeIn(st1, t + 4.4, 0.5, {dx: -8}); A.draw(st1k, t + 5.4, 0.4); A.fadeIn(st1s, t + 5.6, 0.5);
@@ -1116,18 +1119,19 @@ beat(5, 16, (t) => {
 
 /* 6b. One gap: the list of claims moves out of what the transaction’s hash covers, so the proof can include that hash */
 const TIE = tieScene(SX(6), 1200, {
-  head: 'What ties the proof to this transaction?',
-  txT: 'transaction', sigLbl: 'where a signature would go', sigNo: 'left out of the hash',
+  head: 'How is the proof tied to this transaction?',
+  txT: 'transaction', noSig: 'no signature: the contract checks the proof',
+  sigLbl: 'where a signature would go', sigNo: 'left out of the hash',
   proof: 'short proof', proofSub: '',
   restLbl: 'the rest of the transaction',
   rows: [['', '', null, 'what it does: pay through the app'], ['', '', null, 'claims it lists']],
   claimRow: 1, claims: ['claim 1', 'claim 2'], claimX: [340, 490], chipW: 130, claimTo: [170, 320],
   moved: 'moved above', movedX: 275,
-  cover: 'covered by the transaction’s hash, which a signature signs',
+  cover: 'covered by the transaction’s hash, which a signature would sign',
   n: ['the proof', 'its claims', 'the list of claims', 'the transaction’s hash'], n2b: 'the list, moved',
   a: ['decides', 'are on', 'is covered by', 'would be in'], a3b: 'can now be in',
   circle: 'a circle', circleSub: 'nothing can come first', cut: 'no circle', cutSub: 'the hash skips the list', gone: 'no longer covered',
-  then1: 'the proof can now include the transaction’s hash, as a signature signs it',
+  then1: 'the proof can now include the transaction’s hash, so it fits only this transaction',
   then2: 'the contract checks that the moved list is exactly its own claims',
 });
 beat(6, 27, (t) => { A.fadeOut(S6, t, 0.5); A.cam(t, 1.6, {cx: SX(6) + 800, cy: 1650}); TIE.play(t); });
